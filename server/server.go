@@ -1,13 +1,14 @@
-package znet
+package server
 
 import (
 	"fmt"
-	"gts/ziface"
+	"gts/iface"
+	"gts/utils"
 	"net"
 	"time"
 )
 
-//iServer 接口实现，定义一个Server服务类
+//Server 接口实现，定义一个Server服务类
 type Server struct {
 	//服务器的名称
 	Name string
@@ -19,13 +20,12 @@ type Server struct {
 	Port int
 }
 
-//============== 实现 ziface.IServer 里的全部接口方法 ========
+//============== 实现 iface.IServer 里的全部接口方法 ========
 
-//开启网络服务
 func (s *Server) Start() {
-	fmt.Printf("[START] Server listenner at IP: %s, Port %d, is starting\n", s.IP, s.Port)
+	fmt.Printf("[START] Server listener at IP: %s, Port %d, is starting\n", s.IP, s.Port)
 
-	//开启一个go去做服务端Linster业务
+	//开启一个go去做服务端Listener业务
 	go func() {
 		//1 获取一个TCP的Addr
 		addr, err := net.ResolveTCPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
@@ -35,19 +35,19 @@ func (s *Server) Start() {
 		}
 
 		//2 监听服务器地址
-		listenner, err := net.ListenTCP(s.IPVersion, addr)
+		listener, err := net.ListenTCP(s.IPVersion, addr)
 		if err != nil {
 			fmt.Println("listen", s.IPVersion, "err", err)
 			return
 		}
 
 		//已经监听成功
-		fmt.Println("start Zinx server  ", s.Name, " succ, now listenning...")
+		fmt.Println("start Gts server  ", s.Name, " success, now listening...")
 
 		//3 启动server网络连接业务
 		for {
 			//3.1 阻塞等待客户端建立连接请求
-			conn, err := listenner.AcceptTCP()
+			conn, err := listener.AcceptTCP()
 			if err != nil {
 				fmt.Println("Accept err ", err)
 				continue
@@ -79,7 +79,7 @@ func (s *Server) Start() {
 }
 
 func (s *Server) Stop() {
-	fmt.Println("[STOP] Zinx server , name ", s.Name)
+	fmt.Println("[STOP] Gts server , name ", s.Name)
 
 	//TODO  Server.Stop() 将其他需要清理的连接信息或者其他信息 也要一并停止或者清理
 }
@@ -89,21 +89,19 @@ func (s *Server) Serve() {
 
 	//TODO Server.Serve() 是否在启动服务的时候 还要处理其他的事情呢 可以在这里添加
 
-	//阻塞,否则主Go退出， listenner的go将会退出
+	//阻塞,否则主Go退出， listener的go将会退出
 	for {
 		time.Sleep(10 * time.Second)
 	}
 }
 
-/*
-  创建一个服务器句柄
-*/
-func NewServer(name string) ziface.IServer {
+// NewServer 创建一个服务器句柄
+func NewServer() iface.IServer {
 	s := &Server{
-		Name:      name,
-		IPVersion: "tcp4",
-		IP:        "0.0.0.0",
-		Port:      7777,
+		Name:      utils.Conf.Name,
+		IPVersion: utils.Conf.IpVersion,
+		IP:        utils.Conf.Ip,
+		Port:      utils.Conf.Port,
 	}
 
 	return s

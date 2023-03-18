@@ -1,0 +1,7 @@
+name: "gts"
+mode: "dev"
+version: "v0.0.1"
+start_time: "2023-3-17"
+ip: "0.0.0.0"
+port: 7777
+ip_version: "tcp4"
