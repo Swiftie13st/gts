@@ -25,7 +25,7 @@ type AppConfig struct {
 }
 
 func InitSettings() {
-	viper.SetConfigFile("./conf/config.yaml")
+	viper.SetConfigFile("../conf/config.yaml")
 
 	viper.WatchConfig()
 	viper.OnConfigChange(func(in fsnotify.Event) {
