@@ -26,5 +26,5 @@ type IConnection interface {
 	SendBuff(data []byte) error
 }
 
-// HandFunc 定义一个统一处理链接业务的接口
+// HandFunc 定义一个统一处理链接业务的接口 连接 数据 长度
 type HandFunc func(*net.TCPConn, []byte, int) error

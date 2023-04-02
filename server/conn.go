@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"gts/iface"
 	"net"
+	"sync"
 )
 
 type Connection struct {
@@ -20,27 +21,28 @@ type Connection struct {
 	//当前连接的关闭状态
 	isClosed bool
 
-	//该连接的处理方法api
-	handleAPI iface.HandFunc
+	//该连接的处理方法router
+	Router iface.IRouter
 
 	//告知该链接已经退出/停止的channel
 	ExitBuffChan chan bool
 
 	//给缓冲队列发送数据的channel，
 	// 如果向缓冲队列发送数据，那么把数据发送到这个channel下
-	//	SendBuffChan chan []byte
-
+	//SendBuffChan chan []byte
+	// 防止多次关闭的锁
+	mutex sync.Mutex
 }
 
 // NewConnection 创建连接的方法
-func NewConnection(conn *net.TCPConn, connID uint32, callbackApi iface.HandFunc) *Connection {
+func NewConnection(conn *net.TCPConn, connID uint32, router iface.IRouter) *Connection {
 	c := &Connection{
 		Conn:         conn,
 		ConnID:       connID,
 		isClosed:     false,
-		handleAPI:    callbackApi,
 		ExitBuffChan: make(chan bool, 1),
-		//		SendBuffChan: make(chan []byte, 512),
+		Router:       router,
+		//SendBuffChan: make(chan []byte, 512),
 	}
 
 	return c
@@ -54,18 +56,25 @@ func (c *Connection) StartReader() {
 	for {
 		//读取我们最大的数据到buf中
 		buf := make([]byte, 512)
-		cnt, err := c.Conn.Read(buf)
+		_, err := c.Conn.Read(buf)
 		if err != nil {
 			fmt.Println("recv buf err ", err)
 			c.ExitBuffChan <- true
 			continue
 		}
-		//调用当前链接业务
-		if err := c.handleAPI(c.Conn, buf, cnt); err != nil {
-			fmt.Println("connID ", c.ConnID, " handle is error")
-			c.ExitBuffChan <- true
-			return
+
+		//得到当前客户端请求的Request数据
+		req := Request{
+			conn: c,
+			data: buf,
 		}
+		//从路由Routers 中找到注册绑定Conn的对应Handle
+		go func(request iface.IRequest) {
+			//执行注册的路由方法
+			c.Router.PreHandle(request)
+			c.Router.Handle(request)
+			c.Router.PostHandle(request)
+		}(&req)
 	}
 
 }
@@ -90,17 +99,18 @@ func (c *Connection) Start() {
 
 // Stop 停止连接，结束当前连接状态M
 func (c *Connection) Stop() {
-	//1. 如果当前链接已经关闭
+	fmt.Println("Conn Stop(), ConnID = ", c.ConnID)
+	//如果当前链接已经关闭
 	if c.isClosed == true {
 		return
 	}
 	c.isClosed = true
 
 	//TODO Connection Stop() 如果用户注册了该链接的关闭回调业务，那么在此刻应该显示调用
-
 	// 关闭socket链接
 	err := c.Conn.Close()
 	if err != nil {
+		fmt.Println("Conn Stop() Error, err = ", err)
 		return
 	}
 

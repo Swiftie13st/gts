@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"gts/iface"
 	"net"
 	"testing"
 	"time"
@@ -21,8 +22,13 @@ func ClientTest() {
 		fmt.Println("client start err, exit!")
 		return
 	}
-
-	for {
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			fmt.Println("client Close err, exit!")
+		}
+	}(conn)
+	for i := 0; i < 5; i++ {
 		_, err := conn.Write([]byte("hahaha"))
 		if err != nil {
 			fmt.Println("write error err ", err)
@@ -36,9 +42,41 @@ func ClientTest() {
 			return
 		}
 
-		fmt.Printf(" server call back : %s, cnt = %d\n", buf, cnt)
+		fmt.Printf(" server call back : %s, cnt = %d\n", buf[:cnt], cnt)
 
 		time.Sleep(1 * time.Second)
+	}
+}
+
+//ping test 自定义路由
+type PingRouter struct {
+	BaseRouter //一定要先基础BaseRouter
+}
+
+//Test PreHandle
+func (pr *PingRouter) PreHandle(request iface.IRequest) {
+	fmt.Println("Call Router PreHandle")
+	_, err := request.GetConnection().GetTCPConnection().Write([]byte("before ping ....\n"))
+	if err != nil {
+		fmt.Println("call back ping ping ping error")
+	}
+}
+
+//Test Handle
+func (pr *PingRouter) Handle(request iface.IRequest) {
+	fmt.Println("Call PingRouter Handle")
+	_, err := request.GetConnection().GetTCPConnection().Write([]byte("ping...ping...ping\n"))
+	if err != nil {
+		fmt.Println("call back ping ping ping error")
+	}
+}
+
+//Test PostHandle
+func (pr *PingRouter) PostHandle(request iface.IRequest) {
+	fmt.Println("Call Router PostHandle")
+	_, err := request.GetConnection().GetTCPConnection().Write([]byte("After ping .....\n"))
+	if err != nil {
+		fmt.Println("call back ping ping ping error")
 	}
 }
 
@@ -50,12 +88,12 @@ func TestServer(t *testing.T) {
 	*/
 	//1 创建一个server 句柄 s
 	s := NewServer()
-
+	s.AddRouter(&PingRouter{})
 	/*
 		客户端测试
 	*/
 	go ClientTest()
-
 	//2 开启服务
 	s.Serve()
+
 }
