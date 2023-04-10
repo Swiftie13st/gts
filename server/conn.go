@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"gts/iface"
 	"net"
-	"sync"
 )
 
 type Connection struct {
@@ -30,8 +29,6 @@ type Connection struct {
 	//给缓冲队列发送数据的channel，
 	// 如果向缓冲队列发送数据，那么把数据发送到这个channel下
 	//SendBuffChan chan []byte
-	// 防止多次关闭的锁
-	mutex sync.Mutex
 }
 
 // NewConnection 创建连接的方法

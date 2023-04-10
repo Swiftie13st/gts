@@ -5,3 +5,5 @@ start_time: "2023-3-17"
 ip: "0.0.0.0"
 port: 7777
 ip_version: "tcp4"
+max_conn: 3000
+max_packet_size: 4096

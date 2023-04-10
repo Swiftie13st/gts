@@ -15,17 +15,19 @@ import (
 var Conf = new(AppConfig)
 
 type AppConfig struct {
-	Mode      string `mapstructure:"mode"`
-	Name      string `mapstructure:"name"`
-	Version   string `mapstructure:"version"`
-	StartTime string `mapstructure:"start_time"`
-	Ip        string `mapstructure:"ip"`
-	Port      int    `mapstructure:"port"`
-	IpVersion string `mapstructure:"ip_version"`
+	Mode          string `mapstructure:"mode"`
+	Name          string `mapstructure:"name"`
+	Version       string `mapstructure:"version"`
+	StartTime     string `mapstructure:"start_time"`
+	Ip            string `mapstructure:"ip"`
+	Port          int    `mapstructure:"port"`
+	IpVersion     string `mapstructure:"ip_version"`
+	MaxConn       int    `mapstructure:"max_conn"`
+	MaxPacketSize uint32 `mapstructure:"max_packet_size"`
 }
 
-func InitSettings() {
-	viper.SetConfigFile("../conf/config.yaml")
+func InitSettings(path string) {
+	viper.SetConfigFile(path)
 
 	viper.WatchConfig()
 	viper.OnConfigChange(func(in fsnotify.Event) {

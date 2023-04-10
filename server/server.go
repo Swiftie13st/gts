@@ -118,6 +118,6 @@ func NewServer() iface.IServer {
 	return s
 }
 
-func init() {
-	utils.InitSettings()
-}
+//func init() {
+//	utils.InitSettings("../conf/config.yaml")
+//}
