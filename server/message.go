@@ -12,6 +12,15 @@ type Message struct {
 	Data    []byte //消息的内容
 }
 
+// NewMsgPackage 创建一个Message消息包
+func NewMsgPackage(id uint32, data []byte) *Message {
+	return &Message{
+		Id:      id,
+		DataLen: uint32(len(data)),
+		Data:    data,
+	}
+}
+
 // GetDataLen 获取消息数据段长度
 func (msg *Message) GetDataLen() uint32 {
 	return msg.DataLen
