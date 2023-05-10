@@ -29,7 +29,7 @@ func ClientTest() {
 			fmt.Println("client Close err, exit!")
 		}
 	}(conn)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 2; i++ {
 		//创建一个封包对象 dp
 		dp := server.NewDataPack()
 
@@ -38,10 +38,16 @@ func ClientTest() {
 			fmt.Println("Pack error msg id = ", 1)
 			return
 		}
-
-		fmt.Println("send: ", msg)
+		msg2, err := dp.Pack(server.NewMsgPackage(2, []byte("Hello world2222")))
+		if err != nil {
+			fmt.Println("Pack error msg id = ", 2)
+			return
+		}
+		fmt.Println("send: ", msg, msg2)
 		//向服务器端写数据
-		conn.Write(msg)
+		//conn.Write(msg)
+		conn.Write(msg2)
+
 		//先读出流中的head部分
 		headData := make([]byte, dp.GetHeadLen())
 		_, err = io.ReadFull(conn, headData) //ReadFull 会把msg填充满为止
