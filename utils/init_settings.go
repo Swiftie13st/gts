@@ -15,15 +15,17 @@ import (
 var Conf = new(AppConfig)
 
 type AppConfig struct {
-	Mode          string `mapstructure:"mode"`
-	Name          string `mapstructure:"name"`
-	Version       string `mapstructure:"version"`
-	StartTime     string `mapstructure:"start_time"`
-	Ip            string `mapstructure:"ip"`
-	Port          int    `mapstructure:"port"`
-	IpVersion     string `mapstructure:"ip_version"`
-	MaxConn       int    `mapstructure:"max_conn"`
-	MaxPacketSize uint32 `mapstructure:"max_packet_size"`
+	Mode             string `mapstructure:"mode"`
+	Name             string `mapstructure:"name"`
+	Version          string `mapstructure:"version"`
+	StartTime        string `mapstructure:"start_time"`
+	Ip               string `mapstructure:"ip"`
+	Port             int    `mapstructure:"port"`
+	IpVersion        string `mapstructure:"ip_version"`
+	MaxConn          int    `mapstructure:"max_conn"`
+	MaxPacketSize    uint32 `mapstructure:"max_packet_size"`
+	WorkerPoolSize   uint32 `mapstructure:"worker_pool_size"`
+	MaxWorkerTaskLen uint32 `mapstructure:"max_worker_task_len"`
 }
 
 func InitSettings(path string) {

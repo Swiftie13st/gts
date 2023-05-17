@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"gts/iface"
+	"gts/utils"
 	"io"
 	"net"
 )
@@ -30,10 +31,6 @@ type Connection struct {
 
 	//无缓冲管道，用于读、写两个goroutine之间的消息通信
 	msgChan chan []byte
-
-	//给缓冲队列发送数据的channel，
-	// 如果向缓冲队列发送数据，那么把数据发送到这个channel下
-	//SendBuffChan chan []byte
 }
 
 // NewConnection 创建连接的方法
@@ -45,7 +42,6 @@ func NewConnection(conn *net.TCPConn, connID uint32, msgHandler iface.IMsgHandle
 		ExitBuffChan: make(chan bool, 1),
 		MsgHandler:   msgHandler,
 		msgChan:      make(chan []byte),
-		//SendBuffChan: make(chan []byte, 512),
 	}
 
 	return c
@@ -114,8 +110,13 @@ func (c *Connection) StartReader() {
 			conn: c,
 			msg:  msg,
 		}
-		//从路由Routers 中找到注册绑定Conn的对应Handle
-		go c.MsgHandler.DoMsgHandler(&req)
+		if utils.Conf.WorkerPoolSize > 0 {
+			//已经启动工作池机制，将消息交给Worker处理
+			c.MsgHandler.SendMsgToTaskQueue(&req)
+		} else {
+			//从绑定好的消息和对应的处理方法中执行对应的Handle方法
+			go c.MsgHandler.DoMsgHandler(&req)
+		}
 	}
 
 }
@@ -147,6 +148,7 @@ func (c *Connection) Stop() {
 	c.isClosed = true
 
 	//TODO Connection Stop() 如果用户注册了该链接的关闭回调业务，那么在此刻应该显示调用
+
 	// 关闭socket链接
 	err := c.Conn.Close()
 	if err != nil {
@@ -156,10 +158,6 @@ func (c *Connection) Stop() {
 
 	//通知从缓冲队列读数据的业务，该链接已经关闭
 	c.ExitBuffChan <- true
-
-	//关闭该链接全部管道
-	//close(c.ExitBuffChan)
-	//close(c.SendBuffChan)
 }
 
 // GetTCPConnection 从当前连接获取原始的socket TCPConn
@@ -180,7 +178,7 @@ func (c *Connection) RemoteAddr() net.Addr {
 // Send 直接将数据封包发送数据给远程的TCP客户端
 func (c *Connection) Send(msgId uint32, data []byte) error {
 	if c.isClosed == true {
-		return errors.New("Connection closed when send msg")
+		return errors.New("connection closed when send msg")
 	}
 	//将data封包，并且发送
 	dp := NewDataPack()
@@ -193,10 +191,5 @@ func (c *Connection) Send(msgId uint32, data []byte) error {
 	//写回客户端
 	c.msgChan <- msg
 
-	return nil
-}
-
-// SendBuff 将数据发送给缓冲队列，通过专门从缓冲队列读数据的go写给客户端
-func (c *Connection) SendBuff(data []byte) error {
 	return nil
 }

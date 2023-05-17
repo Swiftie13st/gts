@@ -35,6 +35,9 @@ func (s *Server) Start() {
 
 	//开启一个go去做服务端Listener业务
 	go func() {
+		//0 启动worker工作池机制
+		s.msgHandler.StartWorkerPool()
+
 		//1 获取一个TCP的Addr
 		addr, err := net.ResolveTCPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
 		if err != nil {
@@ -85,6 +88,7 @@ func (s *Server) Stop() {
 	fmt.Println("[STOP] Gts server , name ", s.Name)
 
 	//TODO  Server.Stop() 将其他需要清理的连接信息或者其他信息 也要一并停止或者清理
+
 }
 
 func (s *Server) Serve() {
