@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/5/17
-  @desc: //TODO
+  @desc: //消息处理接口
 **/
 
 package iface

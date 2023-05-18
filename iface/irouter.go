@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/4/1
-  @desc: //
+  @desc: //路由接口
 **/
 
 package iface
@@ -13,7 +13,7 @@ package iface
 type IRouter interface {
 	// PreHandle 在处理conn业务之前的钩子方法Hook
 	PreHandle(request IRequest)
-	
+
 	// Handle 处理conn业务的方法
 	Handle(request IRequest)
 

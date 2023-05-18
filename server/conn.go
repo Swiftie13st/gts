@@ -16,10 +16,12 @@ import (
 )
 
 type Connection struct {
+	//当前conn属于那个ConnManger
+	connManager iface.IConnManager
 	//当前连接的socket TCP套接字
 	Conn *net.TCPConn
 	//当前连接的ID 也可以称作为SessionID，ID全局唯一
-	ConnID uint32
+	ConnID uint64
 	//当前连接的关闭状态
 	isClosed bool
 
@@ -34,16 +36,18 @@ type Connection struct {
 }
 
 // NewConnection 创建连接的方法
-func NewConnection(conn *net.TCPConn, connID uint32, msgHandler iface.IMsgHandle) *Connection {
+func NewConnection(server iface.IServer, conn *net.TCPConn, connID uint64) *Connection {
 	c := &Connection{
 		Conn:         conn,
 		ConnID:       connID,
 		isClosed:     false,
 		ExitBuffChan: make(chan bool, 1),
-		MsgHandler:   msgHandler,
+		MsgHandler:   server.GetMsgHandler(),
 		msgChan:      make(chan []byte),
+		connManager:  server.GetConnMgr(),
 	}
 
+	server.GetConnMgr().Add(c)
 	return c
 }
 
@@ -85,7 +89,7 @@ func (c *Connection) StartReader() {
 			c.ExitBuffChan <- true
 			continue
 		}
-
+		fmt.Println(headData)
 		//拆包，得到msgid 和 datalen 放在msg中
 		msg, err := dp.Unpack(headData)
 		if err != nil {
@@ -147,8 +151,7 @@ func (c *Connection) Stop() {
 	}
 	c.isClosed = true
 
-	//TODO Connection Stop() 如果用户注册了该链接的关闭回调业务，那么在此刻应该显示调用
-
+	c.connManager.Remove(c)
 	// 关闭socket链接
 	err := c.Conn.Close()
 	if err != nil {
@@ -166,7 +169,7 @@ func (c *Connection) GetTCPConnection() *net.TCPConn {
 }
 
 // GetConnID 获取当前连接ID
-func (c *Connection) GetConnID() uint32 {
+func (c *Connection) GetConnID() uint64 {
 	return c.ConnID
 }
 

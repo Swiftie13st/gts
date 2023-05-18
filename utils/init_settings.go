@@ -24,8 +24,8 @@ type AppConfig struct {
 	IpVersion        string `mapstructure:"ip_version"`
 	MaxConn          int    `mapstructure:"max_conn"`
 	MaxPacketSize    uint32 `mapstructure:"max_packet_size"`
-	WorkerPoolSize   uint32 `mapstructure:"worker_pool_size"`
-	MaxWorkerTaskLen uint32 `mapstructure:"max_worker_task_len"`
+	WorkerPoolSize   uint64 `mapstructure:"worker_pool_size"`
+	MaxWorkerTaskLen uint64 `mapstructure:"max_worker_task_len"`
 }
 
 func InitSettings(path string) {

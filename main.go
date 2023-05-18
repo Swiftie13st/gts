@@ -13,7 +13,7 @@ import (
 	"gts/utils"
 )
 
-//ping test 自定义路由
+// PingRouter ping test 自定义路由
 type PingRouter struct {
 	server.BaseRouter //一定要先基础BaseRouter
 }
@@ -26,7 +26,7 @@ func (pr *PingRouter) Handle(request iface.IRequest) {
 	}
 }
 
-//ping test 自定义路由
+// Ping2Router ping test 自定义路由
 type Ping2Router struct {
 	server.BaseRouter //一定要先基础BaseRouter
 }

@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/4/1
-  @desc: //请求封装
+  @desc: //请求封装接口
 **/
 
 package iface

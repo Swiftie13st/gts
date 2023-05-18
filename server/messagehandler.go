@@ -15,7 +15,7 @@ import (
 
 type MsgHandle struct {
 	Apis           map[uint32]iface.IRouter //存放每个MsgId 所对应的处理方法的map属性
-	WorkerPoolSize uint32                   //业务工作Worker池的数量
+	WorkerPoolSize uint64                   //业务工作Worker池的数量
 	TaskQueue      []chan iface.IRequest    //Worker负责取任务的消息队列
 }
 
