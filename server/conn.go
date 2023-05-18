@@ -13,6 +13,7 @@ import (
 	"gts/utils"
 	"io"
 	"net"
+	"sync"
 )
 
 type Connection struct {
@@ -32,12 +33,20 @@ type Connection struct {
 
 	//无缓冲管道，用于读、写两个goroutine之间的消息通信
 	msgChan chan []byte
+	//用户收发消息的Lock
+	msgLock sync.RWMutex
+
 	//当前conn属于那个ConnManger
 	connManager iface.IConnManager
 	//当前连接创建时Hook函数
 	onConnStart func(conn iface.IConnection)
 	//当前连接断开时的Hook函数
 	onConnStop func(conn iface.IConnection)
+
+	//链接属性
+	property map[string]interface{}
+	//保护当前property的锁
+	propertyLock sync.Mutex
 }
 
 // NewConnection 创建连接的方法
@@ -187,6 +196,8 @@ func (c *Connection) RemoteAddr() net.Addr {
 
 // Send 直接将数据封包发送数据给远程的TCP客户端
 func (c *Connection) Send(msgId uint32, data []byte) error {
+	c.msgLock.RLock()
+	defer c.msgLock.RUnlock()
 	if c.isClosed == true {
 		return errors.New("connection closed when send msg")
 	}
@@ -218,4 +229,35 @@ func (c *Connection) callOnConnStop() {
 		fmt.Println("CallOnConnStop....")
 		c.onConnStop(c)
 	}
+}
+
+// SetProperty 设置链接属性
+func (c *Connection) SetProperty(key string, value interface{}) {
+	c.propertyLock.Lock()
+	defer c.propertyLock.Unlock()
+	if c.property == nil {
+		c.property = make(map[string]interface{})
+	}
+
+	c.property[key] = value
+}
+
+// GetProperty 获取链接属性
+func (c *Connection) GetProperty(key string) (interface{}, error) {
+	c.propertyLock.Lock()
+	defer c.propertyLock.Unlock()
+
+	if value, ok := c.property[key]; ok {
+		return value, nil
+	}
+
+	return nil, errors.New("no property found")
+}
+
+// RemoveProperty 移除链接属性
+func (c *Connection) RemoveProperty(key string) {
+	c.propertyLock.Lock()
+	defer c.propertyLock.Unlock()
+
+	delete(c.property, key)
 }

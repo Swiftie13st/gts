@@ -41,18 +41,21 @@ func (pr *Ping2Router) Handle(request iface.IRequest) {
 
 func handleStart(conn iface.IConnection) {
 	fmt.Println("Start")
-	err := conn.Send(202, []byte("handleStart"))
-	if err != nil {
-		return
-	}
+	// 给当前连接设置属性
+	fmt.Println("Set Property")
+	conn.SetProperty("name", "ST")
+	conn.SetProperty("key1", "Test1")
+	conn.SetProperty("key2", "Test2")
+	conn.SetProperty("key3", "Test3")
 }
 
 func handleStop(conn iface.IConnection) {
 	fmt.Println("Stop")
-	err := conn.Send(202, []byte("handleStop"))
-	if err != nil {
-		return
-	}
+	fmt.Println(conn.GetProperty("name"))
+	fmt.Println(conn.GetProperty("key1"))
+	fmt.Println(conn.GetProperty("key2"))
+	fmt.Println(conn.GetProperty("key3"))
+
 }
 func main() {
 	utils.InitSettings("./conf/config.yaml")

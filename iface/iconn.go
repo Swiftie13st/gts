@@ -22,4 +22,11 @@ type IConnection interface {
 	RemoteAddr() net.Addr
 	// Send 直接将数据发送数据给远程的TCP客户端
 	Send(msgId uint32, data []byte) error
+
+	// SetProperty 设置链接属性
+	SetProperty(key string, value interface{})
+	// GetProperty 获取链接属性
+	GetProperty(key string) (interface{}, error)
+	// RemoveProperty 移除链接属性
+	RemoveProperty(key string)
 }
