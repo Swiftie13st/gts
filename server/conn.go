@@ -16,8 +16,7 @@ import (
 )
 
 type Connection struct {
-	//当前conn属于那个ConnManger
-	connManager iface.IConnManager
+
 	//当前连接的socket TCP套接字
 	Conn *net.TCPConn
 	//当前连接的ID 也可以称作为SessionID，ID全局唯一
@@ -33,6 +32,12 @@ type Connection struct {
 
 	//无缓冲管道，用于读、写两个goroutine之间的消息通信
 	msgChan chan []byte
+	//当前conn属于那个ConnManger
+	connManager iface.IConnManager
+	//当前连接创建时Hook函数
+	onConnStart func(conn iface.IConnection)
+	//当前连接断开时的Hook函数
+	onConnStop func(conn iface.IConnection)
 }
 
 // NewConnection 创建连接的方法
@@ -45,6 +50,8 @@ func NewConnection(server iface.IServer, conn *net.TCPConn, connID uint64) *Conn
 		MsgHandler:   server.GetMsgHandler(),
 		msgChan:      make(chan []byte),
 		connManager:  server.GetConnMgr(),
+		onConnStart:  server.GetOnConnStart(),
+		onConnStop:   server.GetOnConnStop(),
 	}
 
 	server.GetConnMgr().Add(c)
@@ -127,12 +134,12 @@ func (c *Connection) StartReader() {
 
 // Start 启动连接，让当前连接开始工作
 func (c *Connection) Start() {
-
+	fmt.Println("Conn Start(), ConnID = ", c.ConnID)
 	//1 开启用于写回客户端数据流程的Goroutine
 	go c.StartReader()
 	//2 开启用户从客户端读取数据流程的Goroutine
 	go c.StartWriter()
-
+	c.callOnConnStart()
 	for {
 		select {
 		case <-c.ExitBuffChan:
@@ -150,7 +157,7 @@ func (c *Connection) Stop() {
 		return
 	}
 	c.isClosed = true
-
+	c.callOnConnStop()
 	c.connManager.Remove(c)
 	// 关闭socket链接
 	err := c.Conn.Close()
@@ -195,4 +202,20 @@ func (c *Connection) Send(msgId uint32, data []byte) error {
 	c.msgChan <- msg
 
 	return nil
+}
+
+// callOnConnStart 调用连接OnConnStart Hook函数
+func (c *Connection) callOnConnStart() {
+	if c.onConnStart != nil {
+		fmt.Println("CallOnConnStart....")
+		c.onConnStart(c)
+	}
+}
+
+// callOnConnStart 调用连接OnConnStop Hook函数
+func (c *Connection) callOnConnStop() {
+	if c.onConnStop != nil {
+		fmt.Println("CallOnConnStop....")
+		c.onConnStop(c)
+	}
 }

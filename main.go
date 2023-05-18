@@ -38,10 +38,30 @@ func (pr *Ping2Router) Handle(request iface.IRequest) {
 		fmt.Println("call back ping ping ping error")
 	}
 }
+
+func handleStart(conn iface.IConnection) {
+	fmt.Println("Start")
+	err := conn.Send(202, []byte("handleStart"))
+	if err != nil {
+		return
+	}
+}
+
+func handleStop(conn iface.IConnection) {
+	fmt.Println("Stop")
+	err := conn.Send(202, []byte("handleStop"))
+	if err != nil {
+		return
+	}
+}
 func main() {
 	utils.InitSettings("./conf/config.yaml")
 
 	s := server.NewServer()
+
+	s.SetOnConnStart(handleStart)
+	s.SetOnConnStop(handleStop)
+
 	s.AddRouter(1, &PingRouter{})
 	s.AddRouter(2, &Ping2Router{})
 	s.Serve()

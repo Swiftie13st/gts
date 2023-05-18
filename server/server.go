@@ -28,6 +28,11 @@ type Server struct {
 	msgHandler iface.IMsgHandle
 	//当前Server的链接管理器
 	ConnMgr iface.IConnManager
+
+	//该Server的连接创建时Hook函数
+	onConnStart func(conn iface.IConnection)
+	//该Server的连接断开时的Hook函数
+	onConnStop func(conn iface.IConnection)
 }
 
 // NewServer 创建一个服务器句柄
@@ -70,7 +75,7 @@ func (s *Server) Start() {
 
 		//已经监听成功
 		fmt.Println("start Gts server  ", s.Name, " success, now listening...")
-
+		var cid uint64 = 0
 		//3 启动server网络连接业务
 		for {
 			//服务器最大连接控制,如果超过最大连接，那么则关闭此新的连接
@@ -84,11 +89,8 @@ func (s *Server) Start() {
 				fmt.Println("Accept err ", err)
 				continue
 			}
-			//3.3 TODO Server.Start() 处理该新连接请求的 业务 方法， 此时应该有 handler 和 conn是绑定的
 
 			//TODO server.go 应该有一个自动生成ID的方法
-			var cid uint64
-			cid = 0
 
 			//3.3 处理该新连接请求的 业务 方法， 此时应该有 handler 和 conn是绑定的
 			dealConn := NewConnection(s, conn, cid)
@@ -130,3 +132,39 @@ func (s *Server) GetConnMgr() iface.IConnManager {
 func (s *Server) GetMsgHandler() iface.IMsgHandle {
 	return s.msgHandler
 }
+
+// SetOnConnStart 设置该Server的连接创建时Hook函数
+func (s *Server) SetOnConnStart(hookFunc func(iface.IConnection)) {
+	s.onConnStart = hookFunc
+}
+
+// SetOnConnStop 设置该Server的连接断开时的Hook函数
+func (s *Server) SetOnConnStop(hookFunc func(iface.IConnection)) {
+	s.onConnStop = hookFunc
+}
+
+// GetOnConnStart 得到该Server的连接创建时Hook函数
+func (s *Server) GetOnConnStart() func(iface.IConnection) {
+	return s.onConnStart
+}
+
+// GetOnConnStop 得到该Server的连接断开时的Hook函数
+func (s *Server) GetOnConnStop() func(iface.IConnection) {
+	return s.onConnStop
+}
+
+//// CallOnConnStart 调用连接OnConnStart Hook函数
+//func (s *Server) CallOnConnStart(conn iface.IConnection) {
+//	if s.onConnStart != nil {
+//		fmt.Println("---> CallOnConnStart....")
+//		s.onConnStart(conn)
+//	}
+//}
+//
+//// CallOnConnStop 调用连接OnConnStop Hook函数
+//func (s *Server) CallOnConnStop(conn iface.IConnection) {
+//	if s.onConnStop != nil {
+//		fmt.Println("---> CallOnConnStop....")
+//		s.onConnStop(conn)
+//	}
+//}
