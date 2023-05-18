@@ -14,6 +14,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 type Connection struct {
@@ -47,10 +48,15 @@ type Connection struct {
 	property map[string]interface{}
 	//保护当前property的锁
 	propertyLock sync.Mutex
+
+	//心跳检测器
+	hb iface.IHeartbeat
+	//最后一次活动时间
+	lastActivityTime time.Time
 }
 
-// NewConnection 创建连接的方法
-func NewConnection(server iface.IServer, conn *net.TCPConn, connID uint64) *Connection {
+// newServerConn 创建连接的方法
+func newServerConn(server iface.IServer, conn *net.TCPConn, connID uint64) iface.IConnection {
 	c := &Connection{
 		Conn:         conn,
 		ConnID:       connID,
@@ -64,6 +70,22 @@ func NewConnection(server iface.IServer, conn *net.TCPConn, connID uint64) *Conn
 	}
 
 	server.GetConnMgr().Add(c)
+	return c
+}
+
+// newClientConn 创建连接的方法
+func newClientConn(client iface.IClient, conn *net.TCPConn) iface.IConnection {
+	c := &Connection{
+		Conn:         conn,
+		ConnID:       0,
+		isClosed:     false,
+		ExitBuffChan: make(chan bool, 1),
+		MsgHandler:   client.GetMsgHandler(),
+		msgChan:      make(chan []byte),
+		onConnStart:  client.GetOnConnStart(),
+		onConnStop:   client.GetOnConnStop(),
+	}
+
 	return c
 }
 
@@ -106,6 +128,7 @@ func (c *Connection) StartReader() {
 			continue
 		}
 		fmt.Println(headData)
+
 		//拆包，得到msgid 和 datalen 放在msg中
 		msg, err := dp.Unpack(headData)
 		if err != nil {
@@ -113,6 +136,7 @@ func (c *Connection) StartReader() {
 			c.ExitBuffChan <- true
 			continue
 		}
+
 		//根据 dataLen 读取 data，放在msg.Data中
 		var data []byte
 		if msg.GetDataLen() > 0 {
@@ -124,26 +148,40 @@ func (c *Connection) StartReader() {
 			}
 		}
 		msg.SetData(data)
-
-		//得到当前客户端请求的Request数据
-		req := Request{
-			conn: c,
-			msg:  msg,
-		}
-		if utils.Conf.WorkerPoolSize > 0 {
-			//已经启动工作池机制，将消息交给Worker处理
-			c.MsgHandler.SendMsgToTaskQueue(&req)
+		if msg.GetMsgId() == iface.HeartBeatDefaultMsgID {
+			//心跳检测数据，更新心跳检测Active状态
+			fmt.Println("心跳检测数据，更新心跳检测Active状态")
+			if c.hb != nil {
+				c.updateActivity()
+			}
 		} else {
-			//从绑定好的消息和对应的处理方法中执行对应的Handle方法
-			go c.MsgHandler.DoMsgHandler(&req)
+			//得到当前客户端请求的Request数据
+			fmt.Println("得到当前客户端请求的Request数据")
+			req := Request{
+				conn: c,
+				msg:  msg,
+			}
+			if utils.Conf.WorkerPoolSize > 0 {
+				//已经启动工作池机制，将消息交给Worker处理
+				c.MsgHandler.SendMsgToTaskQueue(&req)
+			} else {
+				//从绑定好的消息和对应的处理方法中执行对应的Handle方法
+				go c.MsgHandler.DoMsgHandler(&req)
+			}
 		}
 	}
-
 }
 
 // Start 启动连接，让当前连接开始工作
 func (c *Connection) Start() {
 	fmt.Println("Conn Start(), ConnID = ", c.ConnID)
+
+	//启动心跳检测
+	if c.hb != nil {
+		c.hb.Start()
+		c.updateActivity()
+	}
+
 	//1 开启用于写回客户端数据流程的Goroutine
 	go c.StartReader()
 	//2 开启用户从客户端读取数据流程的Goroutine
@@ -165,9 +203,16 @@ func (c *Connection) Stop() {
 	if c.isClosed == true {
 		return
 	}
+	//关闭链接绑定的心跳检测器
+	if c.hb != nil {
+		c.hb.Stop()
+	}
 	c.isClosed = true
 	c.callOnConnStop()
-	c.connManager.Remove(c)
+	if c.connManager != nil {
+		c.connManager.Remove(c)
+	}
+
 	// 关闭socket链接
 	err := c.Conn.Close()
 	if err != nil {
@@ -192,6 +237,11 @@ func (c *Connection) GetConnID() uint64 {
 // RemoteAddr 获取远程客户端地址信息
 func (c *Connection) RemoteAddr() net.Addr {
 	return c.Conn.RemoteAddr()
+}
+
+// LocalAddr 获取链接本地地址信息
+func (c *Connection) LocalAddr() net.Addr {
+	return c.Conn.LocalAddr()
 }
 
 // Send 直接将数据封包发送数据给远程的TCP客户端
@@ -260,4 +310,22 @@ func (c *Connection) RemoveProperty(key string) {
 	defer c.propertyLock.Unlock()
 
 	delete(c.property, key)
+}
+
+func (c *Connection) SetHeartBeat(hb iface.IHeartbeat) {
+	c.hb = hb
+}
+
+func (c *Connection) IsAlive() bool {
+	if c.isClosed {
+		return false
+	}
+	lastTimeInterval := time.Now().Sub(c.lastActivityTime)
+	fmt.Println("isAlive: ", lastTimeInterval)
+	// 检查连接最后一次活动时间，如果超过心跳间隔，则认为连接已经死亡
+	return lastTimeInterval < utils.Conf.GetHeartbeatMaxTime()
+}
+
+func (c *Connection) updateActivity() {
+	c.lastActivityTime = time.Now()
 }

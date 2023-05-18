@@ -29,8 +29,9 @@ type IServer interface {
 	GetOnConnStart() func(IConnection)
 	// GetOnConnStop 得到该Server的连接断开时的Hook函数
 	GetOnConnStop() func(IConnection)
-	//// CallOnConnStart 调用连接OnConnStart Hook函数
-	//CallOnConnStart(conn IConnection)
-	//// CallOnConnStop 调用连接OnConnStop Hook函数
-	//CallOnConnStop(conn IConnection)
+
+	// StartHeartBeat 启动心跳检测
+	StartHeartBeat()
+	// GetHeartBeat 获取心跳检测器
+	GetHeartBeat() IHeartbeat
 }

@@ -10,22 +10,32 @@ import (
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
+	"time"
 )
 
 var Conf = new(AppConfig)
 
 type AppConfig struct {
-	Mode             string `mapstructure:"mode"`
-	Name             string `mapstructure:"name"`
-	Version          string `mapstructure:"version"`
-	StartTime        string `mapstructure:"start_time"`
-	Ip               string `mapstructure:"ip"`
-	Port             int    `mapstructure:"port"`
-	IpVersion        string `mapstructure:"ip_version"`
-	MaxConn          int    `mapstructure:"max_conn"`
-	MaxPacketSize    uint32 `mapstructure:"max_packet_size"`
-	WorkerPoolSize   uint64 `mapstructure:"worker_pool_size"`
-	MaxWorkerTaskLen uint64 `mapstructure:"max_worker_task_len"`
+	Mode              string `mapstructure:"mode"`
+	Name              string `mapstructure:"name"`
+	Version           string `mapstructure:"version"`
+	StartTime         string `mapstructure:"start_time"`
+	Ip                string `mapstructure:"ip"`
+	Port              int    `mapstructure:"port"`
+	IpVersion         string `mapstructure:"ip_version"`
+	MaxConn           int    `mapstructure:"max_conn"`
+	MaxPacketSize     uint32 `mapstructure:"max_packet_size"`
+	WorkerPoolSize    uint64 `mapstructure:"worker_pool_size"`
+	MaxWorkerTaskLen  uint64 `mapstructure:"max_worker_task_len"`
+	HeartbeatMaxTime  int    `mapstructure:"heartbeat_max_time"`
+	HeartbeatInterval int    `mapstructure:"heartbeat_interval"`
+}
+
+func (g *AppConfig) GetHeartbeatInterval() time.Duration {
+	return time.Duration(g.HeartbeatInterval) * time.Second
+}
+func (g *AppConfig) GetHeartbeatMaxTime() time.Duration {
+	return time.Duration(g.HeartbeatMaxTime) * time.Second
 }
 
 func InitSettings(path string) {

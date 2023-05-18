@@ -20,6 +20,8 @@ type IConnection interface {
 	GetConnID() uint64
 	// RemoteAddr 获取远程客户端地址信息
 	RemoteAddr() net.Addr
+	// LocalAddr 获取链接本地地址信息
+	LocalAddr() net.Addr
 	// Send 直接将数据发送数据给远程的TCP客户端
 	Send(msgId uint32, data []byte) error
 
@@ -29,4 +31,8 @@ type IConnection interface {
 	GetProperty(key string) (interface{}, error)
 	// RemoveProperty 移除链接属性
 	RemoveProperty(key string)
+	// IsAlive 判断当前连接是否存活
+	IsAlive() bool
+	// SetHeartBeat 设置心跳检测器
+	SetHeartBeat(checker IHeartbeat)
 }

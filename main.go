@@ -61,11 +61,13 @@ func main() {
 	utils.InitSettings("./conf/config.yaml")
 
 	s := server.NewServer()
+	s.StartHeartBeat()
 
 	s.SetOnConnStart(handleStart)
 	s.SetOnConnStop(handleStop)
 
 	s.AddRouter(1, &PingRouter{})
 	s.AddRouter(2, &Ping2Router{})
+
 	s.Serve()
 }

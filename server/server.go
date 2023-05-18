@@ -33,6 +33,9 @@ type Server struct {
 	onConnStart func(conn iface.IConnection)
 	//该Server的连接断开时的Hook函数
 	onConnStop func(conn iface.IConnection)
+
+	//心跳检测器
+	hb iface.IHeartbeat
 }
 
 // NewServer 创建一个服务器句柄
@@ -93,8 +96,16 @@ func (s *Server) Start() {
 			//TODO server.go 应该有一个自动生成ID的方法
 
 			//3.3 处理该新连接请求的 业务 方法， 此时应该有 handler 和 conn是绑定的
-			dealConn := NewConnection(s, conn, cid)
+			dealConn := newServerConn(s, conn, cid)
 			cid++
+
+			//HeartBeat 心跳检测
+			if s.hb != nil {
+				//从Server端克隆一个心跳检测器
+				heartBeat := s.hb.Clone()
+				//绑定当前链接
+				heartBeat.BindConn(dealConn)
+			}
 
 			//3.4 启动当前链接的处理业务
 			go dealConn.Start()
@@ -152,19 +163,13 @@ func (s *Server) GetOnConnStart() func(iface.IConnection) {
 func (s *Server) GetOnConnStop() func(iface.IConnection) {
 	return s.onConnStop
 }
+func (s *Server) GetHeartBeat() iface.IHeartbeat {
+	return s.hb
+}
 
-//// CallOnConnStart 调用连接OnConnStart Hook函数
-//func (s *Server) CallOnConnStart(conn iface.IConnection) {
-//	if s.onConnStart != nil {
-//		fmt.Println("---> CallOnConnStart....")
-//		s.onConnStart(conn)
-//	}
-//}
-//
-//// CallOnConnStop 调用连接OnConnStop Hook函数
-//func (s *Server) CallOnConnStop(conn iface.IConnection) {
-//	if s.onConnStop != nil {
-//		fmt.Println("---> CallOnConnStop....")
-//		s.onConnStop(conn)
-//	}
-//}
+// StartHeartBeat 启动心跳检测
+func (s *Server) StartHeartBeat() {
+	hb := NewHeartbeat(utils.Conf.GetHeartbeatInterval())
+	s.AddRouter(hb.GetMsgID(), hb.GetRouter())
+	s.hb = hb
+}
