@@ -32,7 +32,7 @@ type Connection struct {
 	//告知该链接已经退出/停止的channel
 	ExitBuffChan chan bool
 
-	//无缓冲管道，用于读、写两个goroutine之间的消息通信
+	//用于读、写两个goroutine之间的消息通信
 	msgChan chan []byte
 	//用户收发消息的Lock
 	msgLock sync.RWMutex
@@ -63,7 +63,7 @@ func newServerConn(server iface.IServer, conn *net.TCPConn, connID uint64) iface
 		isClosed:     false,
 		ExitBuffChan: make(chan bool, 1),
 		MsgHandler:   server.GetMsgHandler(),
-		msgChan:      make(chan []byte),
+		msgChan:      make(chan []byte, 1024),
 		connManager:  server.GetConnMgr(),
 		onConnStart:  server.GetOnConnStart(),
 		onConnStop:   server.GetOnConnStop(),

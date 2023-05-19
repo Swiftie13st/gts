@@ -11,7 +11,6 @@ import (
 	"gts/iface"
 	"gts/utils"
 	"net"
-	"time"
 )
 
 //Server 接口实现，定义一个Server服务类
@@ -36,6 +35,9 @@ type Server struct {
 
 	//心跳检测器
 	hb iface.IHeartbeat
+
+	// 捕获链接关闭状态
+	exitChan chan struct{}
 }
 
 // NewServer 创建一个服务器句柄
@@ -55,8 +57,9 @@ func NewServer() iface.IServer {
 //============== 实现 iface.IServer 里的全部接口方法 ========
 
 func (s *Server) Start() {
+	sf := utils.NewSnowflakeGenerator(utils.Conf.WorkerId, utils.Conf.DatacenterId)
 	fmt.Printf("[START] Server listener at IP: %s, Port %d, is starting\n", s.IP, s.Port)
-
+	s.exitChan = make(chan struct{})
 	//开启一个go去做服务端Listener业务
 	go func() {
 		//0 启动worker工作池机制
@@ -78,47 +81,57 @@ func (s *Server) Start() {
 
 		//已经监听成功
 		fmt.Println("start Gts server  ", s.Name, " success, now listening...")
-		var cid uint64 = 0
 		//3 启动server网络连接业务
-		for {
-			//服务器最大连接控制,如果超过最大连接，那么则关闭此新的连接
-			if s.ConnMgr.Len() >= utils.Conf.MaxConn {
-				fmt.Println("Exceeded the maxConn")
-				continue
+		go func() {
+			for {
+				//服务器最大连接控制,如果超过最大连接，那么则关闭此新的连接
+				if s.ConnMgr.Len() >= utils.Conf.MaxConn {
+					fmt.Println("Exceeded the maxConn")
+					continue
+				}
+				//阻塞等待客户端建立连接请求
+				conn, err := listener.AcceptTCP()
+				if err != nil {
+					fmt.Println("Accept err ", err)
+					continue
+				}
+
+				//3.3 处理该新连接请求的 业务 方法， 此时应该有 handler 和 conn是绑定的
+				cid, err := sf.NextVal()
+				if err != nil {
+					fmt.Println("Id gen err ", err)
+					continue
+				}
+				dealConn := newServerConn(s, conn, cid)
+
+				//HeartBeat 心跳检测
+				if s.hb != nil {
+					//从Server端克隆一个心跳检测器
+					heartBeat := s.hb.Clone()
+					//绑定当前链接
+					heartBeat.BindConn(dealConn)
+				}
+
+				//3.4 启动当前链接的处理业务
+				go dealConn.Start()
 			}
-			//阻塞等待客户端建立连接请求
-			conn, err := listener.AcceptTCP()
+		}()
+		select {
+		case <-s.exitChan:
+			err := listener.Close()
 			if err != nil {
-				fmt.Println("Accept err ", err)
-				continue
+				fmt.Println("listener close err: ", err)
 			}
-
-			//TODO server.go 应该有一个自动生成ID的方法
-
-			//3.3 处理该新连接请求的 业务 方法， 此时应该有 handler 和 conn是绑定的
-			dealConn := newServerConn(s, conn, cid)
-			cid++
-
-			//HeartBeat 心跳检测
-			if s.hb != nil {
-				//从Server端克隆一个心跳检测器
-				heartBeat := s.hb.Clone()
-				//绑定当前链接
-				heartBeat.BindConn(dealConn)
-			}
-
-			//3.4 启动当前链接的处理业务
-			go dealConn.Start()
-			time.Sleep(time.Second * 5)
-
 		}
 	}()
+
 }
 
 func (s *Server) Stop() {
 	fmt.Println("[STOP] Gts server , name ", s.Name)
 	s.ConnMgr.ClearConn()
-
+	s.exitChan <- struct{}{}
+	close(s.exitChan)
 }
 
 func (s *Server) Serve() {

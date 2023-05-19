@@ -29,6 +29,8 @@ type AppConfig struct {
 	MaxWorkerTaskLen  uint64 `mapstructure:"max_worker_task_len"`
 	HeartbeatMaxTime  int    `mapstructure:"heartbeat_max_time"`
 	HeartbeatInterval int    `mapstructure:"heartbeat_interval"`
+	WorkerId          int64  `mapstructure:"worker_id"`
+	DatacenterId      int64  `mapstructure:"datacenter_id"`
 }
 
 func (g *AppConfig) GetHeartbeatInterval() time.Duration {
