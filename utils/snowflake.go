@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/5/19
-  @desc: //TODO
+  @desc: //雪花算法生成唯一id
 **/
 
 package utils

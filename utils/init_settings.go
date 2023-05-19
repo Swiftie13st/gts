@@ -31,6 +31,8 @@ type AppConfig struct {
 	HeartbeatInterval int    `mapstructure:"heartbeat_interval"`
 	WorkerId          int64  `mapstructure:"worker_id"`
 	DatacenterId      int64  `mapstructure:"datacenter_id"`
+	LogLevel          string `mapstructure:"log_level"`
+	LogPath           string `mapstructure:"log_path"`
 }
 
 func (g *AppConfig) GetHeartbeatInterval() time.Duration {
