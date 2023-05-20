@@ -137,8 +137,6 @@ func (s *Server) Stop() {
 func (s *Server) Serve() {
 	s.Start()
 
-	//TODO Server.Serve() 是否在启动服务的时候 还要处理其他的事情呢 可以在这里添加
-
 	//阻塞,否则主Go退出， listener的go将会退出
 	select {}
 }
