@@ -59,7 +59,6 @@ func handleStop(conn iface.IConnection) {
 }
 func main() {
 	utils.InitSettings("./conf/config.yaml")
-
 	s := server.NewServer()
 	s.StartHeartBeat()
 
