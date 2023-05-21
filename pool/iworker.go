@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/5/21
-  @desc: //TODO
+  @desc: //worker接口
 **/
 
 package pool
@@ -13,6 +13,7 @@ type worker interface {
 	finish()
 	lastUsedTime() time.Time
 	inputFunc(func())
+	inputParam(interface{})
 }
 
 type workerQueue interface {

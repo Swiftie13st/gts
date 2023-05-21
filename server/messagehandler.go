@@ -9,13 +9,14 @@ package server
 import (
 	"fmt"
 	"gts/iface"
+	"gts/pool"
 	"gts/utils"
 	"strconv"
 )
 
 type MsgHandle struct {
 	Apis           map[uint32]iface.IRouter //存放每个MsgId 所对应的处理方法的map属性
-	WorkerPoolSize uint64                   //业务工作Worker池的数量
+	WorkerPoolSize int                      //业务工作Worker池的数量
 	TaskQueue      []chan iface.IRequest    //Worker负责取任务的消息队列
 }
 
@@ -59,7 +60,7 @@ func (mh *MsgHandle) SendMsgToTaskQueue(request iface.IRequest) {
 	//轮询的平均分配法则
 
 	//得到需要处理此条连接的workerID TODO 分配机制
-	workerID := request.GetConnection().GetConnID() % mh.WorkerPoolSize
+	workerID := request.GetConnection().GetConnID() % uint64(mh.WorkerPoolSize)
 	fmt.Println("Add ConnID=", request.GetConnection().GetConnID(), " request msgID=", request.GetMsgID(), "to workerID=", workerID)
 	//将请求消息发送给任务队列
 	mh.TaskQueue[workerID] <- request
@@ -67,6 +68,7 @@ func (mh *MsgHandle) SendMsgToTaskQueue(request iface.IRequest) {
 
 // StartOneWorker 启动一个Worker工作流程
 func (mh *MsgHandle) startOneWorker(workerID int, taskQueue chan iface.IRequest) {
+
 	fmt.Println("Worker ID = ", workerID, " is started.")
 	//不断地等待队列中的消息
 	for {
@@ -80,12 +82,26 @@ func (mh *MsgHandle) startOneWorker(workerID int, taskQueue chan iface.IRequest)
 
 // StartWorkerPool 启动worker工作池
 func (mh *MsgHandle) StartWorkerPool() {
+	gPool, err := pool.NewPoolWithFunc(mh.WorkerPoolSize, func(i interface{}) {
+		j := i.(int)
+		mh.TaskQueue[j] = make(chan iface.IRequest, utils.Conf.MaxWorkerTaskLen)
+		mh.startOneWorker(j, mh.TaskQueue[j])
+	})
+	if err != nil {
+		fmt.Println("StartWorkerPool err: ", err)
+	}
 	//遍历需要启动worker的数量，依此启动
-	for i := 0; i < int(mh.WorkerPoolSize); i++ {
+	for i := 0; i < mh.WorkerPoolSize; i++ {
 		//一个worker被启动
 		//给当前worker对应的任务队列开辟空间
 		mh.TaskQueue[i] = make(chan iface.IRequest, utils.Conf.MaxWorkerTaskLen)
 		//启动当前Worker，阻塞的等待对应的任务队列是否有消息传递进来
-		go mh.startOneWorker(i, mh.TaskQueue[i])
+		//go mh.startOneWorker(i, mh.TaskQueue[i])
+		err := gPool.Invoke(i)
+		if err != nil {
+			fmt.Println("Invoke err: ", err)
+			return
+		}
 	}
+
 }

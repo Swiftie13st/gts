@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/5/21
-  @desc: //worker
+  @desc: //TODO
 **/
 
 package pool
@@ -12,16 +12,16 @@ import (
 	"time"
 )
 
-type goWorker struct {
+type goWorkerWithFunc struct {
 	// 属于的协程池
-	pool *GPool
+	pool *GPoolWithFunc
 	// 用于接收异步任务包的chan
-	task chan func()
+	args chan interface{}
 
 	lastUsed time.Time
 }
 
-func (w *goWorker) run() {
+func (w *goWorkerWithFunc) run() {
 	w.pool.addRunning(1)
 	go func() {
 		defer func() {
@@ -34,11 +34,11 @@ func (w *goWorker) run() {
 			w.pool.cond.Signal()
 		}()
 
-		for f := range w.task {
-			if f == nil {
+		for args := range w.args {
+			if args == nil {
 				return
 			}
-			f()
+			w.pool.poolFunc(args)
 			if ok := w.pool.revertWorker(w); !ok {
 				return
 			}
@@ -46,17 +46,17 @@ func (w *goWorker) run() {
 	}()
 }
 
-func (w *goWorker) finish() {
-	w.task <- nil
+func (w *goWorkerWithFunc) finish() {
+	w.args <- nil
 }
 
-func (w *goWorker) lastUsedTime() time.Time {
+func (w *goWorkerWithFunc) lastUsedTime() time.Time {
 	return w.lastUsed
 }
 
-func (w *goWorker) inputFunc(fn func()) {
-	w.task <- fn
-}
-func (w *goWorker) inputParam(arg interface{}) {
+func (w *goWorkerWithFunc) inputFunc(fn func()) {
 	panic("unreachable")
+}
+func (w *goWorkerWithFunc) inputParam(arg interface{}) {
+	w.args <- arg
 }

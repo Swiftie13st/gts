@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/5/21
-  @desc: //TODO
+  @desc: //任务队列，栈实现形式
 **/
 
 package pool

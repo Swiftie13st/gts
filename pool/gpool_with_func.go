@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/5/21
-  @desc: //协程池
+  @desc: //有传参函数的pool
 **/
 
 package pool
@@ -13,11 +13,7 @@ import (
 	"time"
 )
 
-//实现了对大规模 goroutine 的调度管理、goroutine 复用，
-//允许使用者在开发并发程序的时候限制 goroutine 数量，
-//复用资源，达到更高效执行任务的效果。
-
-type GPool struct {
+type GPoolWithFunc struct {
 	lock sync.Locker
 	// 上限容量
 	cap int32
@@ -33,12 +29,14 @@ type GPool struct {
 	workers workerQueue
 	// 当前等待的数量
 	waiting int32
+	// 任务函数
+	poolFunc func(interface{})
 }
 
 // 获取一个worker
-func (p *GPool) retrieveWorker() (w worker) {
+func (p *GPoolWithFunc) retrieveWorker() (w worker) {
 	spawnWorker := func() {
-		w = p.workerCache.Get().(*goWorker)
+		w = p.workerCache.Get().(*goWorkerWithFunc)
 		w.run()
 	}
 
@@ -77,7 +75,7 @@ func (p *GPool) retrieveWorker() (w worker) {
 }
 
 // 放回一个worker
-func (p *GPool) revertWorker(worker *goWorker) bool {
+func (p *GPoolWithFunc) revertWorker(worker *goWorkerWithFunc) bool {
 	if capacity := p.Cap(); (capacity > 0 && p.Running() > capacity) || p.IsClosed() {
 		p.cond.Broadcast()
 		return false
@@ -100,19 +98,20 @@ func (p *GPool) revertWorker(worker *goWorker) bool {
 	return true
 }
 
-func NewPool(size int) (*GPool, error) {
+func NewPoolWithFunc(size int, pf func(interface{})) (*GPoolWithFunc, error) {
 	if size <= 0 {
 		size = -1
 	}
 
-	p := &GPool{
-		cap:  int32(size),
-		lock: NewSpinLock(),
+	p := &GPoolWithFunc{
+		cap:      int32(size),
+		lock:     NewSpinLock(),
+		poolFunc: pf,
 	}
 	p.workerCache.New = func() interface{} {
-		return &goWorker{
+		return &goWorkerWithFunc{
 			pool: p,
-			task: make(chan func(), 1),
+			args: make(chan interface{}, 1),
 		}
 	}
 	p.cond = sync.NewCond(p.lock)
@@ -120,26 +119,26 @@ func NewPool(size int) (*GPool, error) {
 	return p, nil
 }
 
-func (p *GPool) IsClosed() bool {
+func (p *GPoolWithFunc) IsClosed() bool {
 	return atomic.LoadInt32(&p.state) == 1
 }
 
 // Waiting 当前正在等待运行的goroutine数量
-func (p *GPool) Waiting() int {
+func (p *GPoolWithFunc) Waiting() int {
 	return int(atomic.LoadInt32(&p.waiting))
 }
 
-func (p *GPool) Cap() int {
+func (p *GPoolWithFunc) Cap() int {
 	return int(atomic.LoadInt32(&p.cap))
 }
 
 // Running 当前正在运行的goroutine数量
-func (p *GPool) Running() int {
+func (p *GPoolWithFunc) Running() int {
 	return int(atomic.LoadInt32(&p.running))
 }
 
 // Free 当前空闲的goroutine数量，-1表示无上限
-func (p *GPool) Free() int {
+func (p *GPoolWithFunc) Free() int {
 	c := p.Cap()
 	if c < 0 {
 		return -1
@@ -148,7 +147,7 @@ func (p *GPool) Free() int {
 }
 
 // Release 关闭pool
-func (p *GPool) Release() {
+func (p *GPoolWithFunc) Release() {
 	if !atomic.CompareAndSwapInt32(&p.state, 0, 1) {
 		return
 	}
@@ -160,14 +159,14 @@ func (p *GPool) Release() {
 }
 
 // Reboot 重启一个pool
-func (p *GPool) Reboot() {
+func (p *GPoolWithFunc) Reboot() {
 	if atomic.CompareAndSwapInt32(&p.state, 1, 0) {
 		// todo: 重启成功后的逻辑
 	}
 }
 
 // Tune 更改池的容量
-func (p *GPool) Tune(size int) {
+func (p *GPoolWithFunc) Tune(size int) {
 	capacity := p.Cap()
 	if capacity == -1 || size <= 0 || size == capacity {
 		return
@@ -182,21 +181,21 @@ func (p *GPool) Tune(size int) {
 	}
 }
 
-func (p *GPool) addRunning(delta int) {
+func (p *GPoolWithFunc) addRunning(delta int) {
 	atomic.AddInt32(&p.running, int32(delta))
 }
 
-func (p *GPool) addWaiting(delta int) {
+func (p *GPoolWithFunc) addWaiting(delta int) {
 	atomic.AddInt32(&p.waiting, int32(delta))
 }
 
-// Submit 提交一个任务
-func (p *GPool) Submit(task func()) error {
+// Invoke 唤醒一个任务
+func (p *GPoolWithFunc) Invoke(args interface{}) error {
 	if p.IsClosed() {
 		return errors.New("pool is closed")
 	}
 	if w := p.retrieveWorker(); w != nil {
-		w.inputFunc(task)
+		w.inputParam(args)
 		return nil
 	}
 	return errors.New("pool is overloaded")
