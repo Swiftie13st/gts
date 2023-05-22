@@ -141,14 +141,17 @@ func printLog(lv LogLevel, msg string) {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	// 拿到第二层的函数名
 	funcName, filePath, lineNo := getInfo(3)
-
+	log := fmt.Sprintf("[%s] [%s] [%s:%s:%d] %s", now, getLogLevelStr(lv), filePath, funcName, lineNo, msg)
+	fmt.Println(log)
+	if LogFileName == "" {
+		return
+	}
 	logFile, err := os.OpenFile(LogFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Println("open log file failed, err:", err)
 		return
 	}
-	log := fmt.Sprintf("[%s] [%s] [%s:%s:%d] %s", now, getLogLevelStr(lv), filePath, funcName, lineNo, msg)
-	fmt.Println(log)
+
 	fprintf, err := fmt.Fprintln(logFile, log)
 	if err != nil {
 		fmt.Println(fprintf, "write log file failed, err:", err)
@@ -157,11 +160,21 @@ func printLog(lv LogLevel, msg string) {
 
 }
 
-func InitLogger() (Logger, error) {
+func InitLoggerDefault() (Logger, error) {
 	level := Conf.LogLevel
 	logPath := Conf.LogPath
 	Log = NewLog(level)
 	LogFileName = getFileName(logPath, "log")
+	return Log, nil
+}
+
+func InitLogger(level string, path ...string) (Logger, error) {
+	Log = NewLog(level)
+	if path == nil {
+		LogFileName = ""
+		return Log, nil
+	}
+	LogFileName = getFileName(path[0], "log")
 	return Log, nil
 }
 

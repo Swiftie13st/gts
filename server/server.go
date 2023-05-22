@@ -11,6 +11,8 @@ import (
 	"gts/iface"
 	"gts/utils"
 	"net"
+	"os"
+	"os/signal"
 )
 
 //Server 接口实现，定义一个Server服务类
@@ -137,8 +139,12 @@ func (s *Server) Stop() {
 func (s *Server) Serve() {
 	s.Start()
 
-	//阻塞,否则主Go退出， listener的go将会退出
-	select {}
+	// 阻塞,否则主Go退出， listener的go将会退出
+	c := make(chan os.Signal, 1)
+	// 监听指定信号 ctrl+c kill信号
+	signal.Notify(c, os.Interrupt, os.Kill)
+	sig := <-c
+	fmt.Printf("[SERVE] %s, Serve Interrupt, signal = %v", s.Name, sig)
 }
 
 // AddRouter 路由功能：给当前服务注册一个路由业务方法，供客户端链接处理使用

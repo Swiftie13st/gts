@@ -7,7 +7,9 @@
 package pool
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +33,8 @@ type GPoolWithFunc struct {
 	waiting int32
 	// 任务函数
 	poolFunc func(interface{})
+	// 关闭定时回收
+	stopPurge context.CancelFunc
 }
 
 // 获取一个worker
@@ -116,6 +120,12 @@ func NewPoolWithFunc(size int, pf func(interface{})) (*GPoolWithFunc, error) {
 	}
 	p.cond = sync.NewCond(p.lock)
 	p.workers = newWorkerStack(size)
+
+	// 开启定时回收
+	var ctx context.Context
+	ctx, p.stopPurge = context.WithCancel(context.Background())
+	go p.purgeStaleWorkers(ctx)
+
 	return p, nil
 }
 
@@ -161,7 +171,10 @@ func (p *GPoolWithFunc) Release() {
 // Reboot 重启一个pool
 func (p *GPoolWithFunc) Reboot() {
 	if atomic.CompareAndSwapInt32(&p.state, 1, 0) {
-		// todo: 重启成功后的逻辑
+		// 开启定时回收
+		var ctx context.Context
+		ctx, p.stopPurge = context.WithCancel(context.Background())
+		go p.purgeStaleWorkers(ctx)
 	}
 }
 
@@ -199,4 +212,52 @@ func (p *GPoolWithFunc) Invoke(args interface{}) error {
 		return nil
 	}
 	return errors.New("pool is overloaded")
+}
+
+// purgeStaleWorkers 定时回收空闲的G
+func (p *GPoolWithFunc) purgeStaleWorkers(ctx context.Context) {
+	ExpiryDuration := time.Duration(10) * time.Second
+	ticker := time.NewTicker(ExpiryDuration)
+
+	defer func() {
+		ticker.Stop()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// 时间到跳出阻塞
+		}
+
+		if p.IsClosed() {
+			break
+		}
+
+		var isDormant bool
+		p.lock.Lock()
+		staleWorkers := p.workers.refresh(ExpiryDuration)
+		n := p.Running()
+		isDormant = n == 0 || n == len(staleWorkers)
+		if len(staleWorkers) > 0 {
+			fmt.Println("回收workers，数量：", len(staleWorkers))
+		}
+		p.lock.Unlock()
+		// 回收协程
+		for i := range staleWorkers {
+			staleWorkers[i].finish()
+			staleWorkers[i] = nil
+		}
+		// 如果有等待的协程，则全部唤醒竞争
+		if isDormant && p.Waiting() > 0 {
+			p.cond.Broadcast()
+		}
+	}
+}
+
+// StopPurgeStaleWorkers 关闭定时回收
+func (p *GPoolWithFunc) StopPurgeStaleWorkers() {
+	p.stopPurge()
+	p.stopPurge = nil
 }
