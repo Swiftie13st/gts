@@ -37,6 +37,8 @@ type Server struct {
 
 	//心跳检测器
 	hb iface.IHeartbeat
+	// 限流
+	rateLimit iface.IRateLimit
 
 	// 捕获链接关闭状态
 	exitChan chan struct{}
@@ -188,5 +190,14 @@ func (s *Server) GetHeartBeat() iface.IHeartbeat {
 func (s *Server) StartHeartBeat() {
 	hb := NewHeartbeat(utils.Conf.GetHeartbeatInterval())
 	s.AddRouter(hb.GetMsgID(), hb.GetRouter())
+	s.hb = hb
+}
+func (s *Server) GetRateLimit() iface.IRateLimit {
+	return s.rateLimit
+}
+
+// StartRateLimit 启动限流
+func (s *Server) StartRateLimit() {
+	hb := NewHeartbeat(utils.Conf.GetHeartbeatInterval())
 	s.hb = hb
 }

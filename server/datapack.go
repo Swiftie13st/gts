@@ -71,7 +71,7 @@ func (dp *DataPack) Unpack(binaryData []byte) (iface.IMessage, error) {
 
 	//判断dataLen的长度是否超出我们允许的最大包长度
 	if utils.Conf.MaxPacketSize > 0 && msg.DataLen > utils.Conf.MaxPacketSize {
-		return nil, errors.New("Too large msg data recieved")
+		return nil, errors.New("too large msg data recieved")
 	}
 
 	//这里只需要把head的数据拆包出来就可以了，然后再通过head的长度，再从conn读取一次数据

@@ -39,7 +39,7 @@ type GPool struct {
 	stopPurge context.CancelFunc
 }
 
-// 获取一个worker
+// retrieveWorker获取一个worker
 func (p *GPool) retrieveWorker() (w worker) {
 	spawnWorker := func() {
 		w = p.workerCache.Get().(*goWorker)
@@ -80,7 +80,7 @@ func (p *GPool) retrieveWorker() (w worker) {
 	return
 }
 
-// 放回一个worker
+// revertWorker放回一个worker
 func (p *GPool) revertWorker(worker *goWorker) bool {
 	if capacity := p.Cap(); (capacity > 0 && p.Running() > capacity) || p.IsClosed() {
 		p.cond.Broadcast()
@@ -242,7 +242,7 @@ func (p *GPool) purgeStaleWorkers(ctx context.Context) {
 		n := p.Running()
 		isDormant = n == 0 || n == len(staleWorkers)
 		if len(staleWorkers) > 0 {
-			fmt.Println("回收workers，数量：", len(staleWorkers))
+			fmt.Println("purge workers：", len(staleWorkers))
 		}
 		p.lock.Unlock()
 		// 回收协程

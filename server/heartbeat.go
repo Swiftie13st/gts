@@ -84,13 +84,13 @@ func (h *Heartbeat) BindRouter(msgID uint32, router iface.IRouter) {
 func (h *Heartbeat) Start() {
 	go func() {
 		ticker := time.NewTicker(h.interval)
-		fmt.Println("Start 启动心跳检测")
+		fmt.Println("Start Heartbeat")
 		for {
 			select {
 			case <-ticker.C:
 				err := h.check()
 				if err != nil {
-					fmt.Println("心跳检测err: ", err)
+					fmt.Println("Heartbeat err: ", err)
 					return
 				}
 			case <-h.quitChan:

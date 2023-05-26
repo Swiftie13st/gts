@@ -241,7 +241,7 @@ func (p *GPoolWithFunc) purgeStaleWorkers(ctx context.Context) {
 		n := p.Running()
 		isDormant = n == 0 || n == len(staleWorkers)
 		if len(staleWorkers) > 0 {
-			fmt.Println("回收workers，数量：", len(staleWorkers))
+			fmt.Println("purge workers：", len(staleWorkers))
 		}
 		p.lock.Unlock()
 		// 回收协程
