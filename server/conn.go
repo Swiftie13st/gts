@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/3/31
-  @desc: //TODO
+  @desc: //TCP
 **/
 
 package server
@@ -227,6 +227,8 @@ func (c *Connection) Stop() {
 
 	//通知从缓冲队列读数据的业务，该链接已经关闭
 	c.ExitBuffChan <- true
+	//close(c.ExitBuffChan)
+	//close(c.msgChan)
 }
 
 // GetTCPConnection 从当前连接获取原始的socket TCPConn

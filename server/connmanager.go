@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/5/18
-  @desc: //TODO
+  @desc: //管理连接信息
 **/
 
 package server

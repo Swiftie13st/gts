@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/3/31
-  @desc: //TODO
+  @desc: //WS
 **/
 
 package server
@@ -12,8 +12,6 @@ import (
 	"github.com/gorilla/websocket"
 	"gts/iface"
 	"gts/utils"
-	"io"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -131,7 +129,7 @@ func (c *WsConnection) StartReader() {
 			c.ExitBuffChan <- true
 			continue
 		}
-		fmt.Println(headData)
+		fmt.Println("recv data: ", string(headData))
 
 		//拆包，得到msgid 和 datalen 放在msg中
 		msg, err := dp.Unpack(headData)
@@ -141,17 +139,6 @@ func (c *WsConnection) StartReader() {
 			continue
 		}
 
-		//根据 dataLen 读取 data，放在msg.Data中
-		var data []byte
-		if msg.GetDataLen() > 0 {
-			data = make([]byte, msg.GetDataLen())
-			if _, err := io.ReadFull(c.GetTCPConnection(), data); err != nil {
-				fmt.Println("read msg data error ", err)
-				c.ExitBuffChan <- true
-				continue
-			}
-		}
-		msg.SetData(data)
 		if msg.GetMsgId() == iface.HeartBeatDefaultMsgID {
 			//心跳检测数据，更新心跳检测Active状态
 			fmt.Println("心跳检测数据，更新心跳检测Active状态")
@@ -185,9 +172,9 @@ func (c *WsConnection) read() ([]byte, error) {
 	_, message, err := c.Conn.ReadMessage()
 	if err != nil {
 		if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-			log.Printf("error: %v", err)
+			fmt.Printf("error: %v", err)
 		} else {
-			log.Println("其他", err)
+			fmt.Println("其他", err)
 		}
 		return nil, err
 	}
@@ -226,6 +213,11 @@ func (c *WsConnection) Stop() {
 	if c.isClosed == true {
 		return
 	}
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if c.isClosed == true {
+		return
+	}
 	//关闭链接绑定的心跳检测器
 	if c.hb != nil {
 		c.hb.Stop()
@@ -245,6 +237,8 @@ func (c *WsConnection) Stop() {
 
 	//通知从缓冲队列读数据的业务，该链接已经关闭
 	c.ExitBuffChan <- true
+	//close(c.ExitBuffChan)
+	//close(c.msgChan)
 }
 
 // GetTCPConnection 从当前连接获取原始的socket TCPConn

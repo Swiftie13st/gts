@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/5/21
-  @desc: //TODO
+  @desc: //有函数的worker
 **/
 
 package pool
@@ -54,7 +54,7 @@ func (w *goWorkerWithFunc) lastUsedTime() time.Time {
 	return w.lastUsed
 }
 
-func (w *goWorkerWithFunc) inputFunc(fn func()) {
+func (w *goWorkerWithFunc) inputFunc(func()) {
 	panic("unreachable")
 }
 func (w *goWorkerWithFunc) inputParam(arg interface{}) {

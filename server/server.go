@@ -177,11 +177,13 @@ func (s *Server) Start() {
 
 	//0 启动worker工作池机制
 	s.msgHandler.StartWorkerPool()
+	if utils.Conf.TCPMode {
+		go s.StartTcpServer()
+	}
+	if utils.Conf.WSMode {
+		go s.StartWebSocketServer()
+	}
 
-	//开启一个go去做服务端Listener业务
-	go s.StartTcpServer()
-
-	go s.StartWebSocketServer()
 }
 
 func (s *Server) Stop() {

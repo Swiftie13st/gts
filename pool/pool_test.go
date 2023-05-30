@@ -50,12 +50,9 @@ func TestPool(t *testing.T) {
 }
 
 func TestPoolWithFunc(t *testing.T) {
-	p, err := NewPoolWithFunc(10, func(i interface{}) {
+	p := NewPoolWithFunc(10, func(i interface{}) {
 		demoFunc2(i)
 	})
-	if err != nil {
-		t.Error(err)
-	}
 
 	for i := 0; i < 100; i++ {
 		err := p.Invoke(i)

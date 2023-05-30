@@ -110,16 +110,16 @@ func recvMsg(conn net.Conn) {
 
 func handleClientStart(conn iface.IConnection) {
 
-	for i := 0; i < 20; i++ {
-		go func(i int) {
-			err := conn.Send(1, []byte("Hello world Start"))
-			if err != nil {
-				fmt.Println("handleClientStart, err: ", err)
-				return
-			}
-		}(i)
+	//for i := 0; i < 20; i++ {
+	go func() {
+		err := conn.Send(1, []byte("Hello world Start"))
+		if err != nil {
+			fmt.Println("handleClientStart, err: ", err)
+			return
+		}
+	}()
 
-	}
+	//}
 
 }
 
