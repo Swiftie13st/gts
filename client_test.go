@@ -108,14 +108,31 @@ func recvMsg(conn net.Conn) {
 
 }
 
+func handleClientStart(conn iface.IConnection) {
+
+	for i := 0; i < 20; i++ {
+		go func(i int) {
+			err := conn.Send(1, []byte("Hello world Start"))
+			if err != nil {
+				fmt.Println("handleClientStart, err: ", err)
+				return
+			}
+		}(i)
+
+	}
+
+}
+
 //Server 模块的测试函数
 func TestServer(t *testing.T) {
 	client := server.NewClient("127.0.0.1", 7777)
 
 	client.AddRouter(1, &ClientRouter{})
 	//启动心跳检测
-	client.StartHeartBeat()
-	client.Start()
+	//client.StartHeartBeat()
 
+	client.SetOnConnStart(handleClientStart)
+	client.Start()
+	//ClientTest()
 	select {}
 }

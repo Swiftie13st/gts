@@ -93,7 +93,7 @@ func newClientConn(client iface.IClient, conn *net.TCPConn) iface.IConnection {
 
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
 func (c *Connection) StartWriter() {
-
+	fmt.Println("Writer Goroutine is  running")
 	defer fmt.Println(c.RemoteAddr().String(), " conn Writer exit!")
 	defer c.Stop()
 
@@ -131,7 +131,7 @@ func (c *Connection) StartReader() {
 			c.ExitBuffChan <- true
 			continue
 		}
-		fmt.Println(headData)
+		fmt.Println("headData", headData)
 
 		//拆包，得到msgid 和 datalen 放在msg中
 		msg, err := dp.Unpack(headData)
@@ -258,6 +258,8 @@ func (c *Connection) LocalAddr() net.Addr {
 func (c *Connection) Send(msgId uint32, data []byte) error {
 	c.msgLock.RLock()
 	defer c.msgLock.RUnlock()
+
+	fmt.Println("Send ", string(data))
 	if c.isClosed == true {
 		return errors.New("connection closed when send msg")
 	}

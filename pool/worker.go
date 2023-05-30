@@ -40,6 +40,7 @@ func (w *goWorker) run() {
 			}
 			f()
 			if ok := w.pool.revertWorker(w); !ok {
+				//fmt.Println("")
 				return
 			}
 		}
@@ -57,6 +58,6 @@ func (w *goWorker) lastUsedTime() time.Time {
 func (w *goWorker) inputFunc(fn func()) {
 	w.task <- fn
 }
-func (w *goWorker) inputParam(arg interface{}) {
+func (w *goWorker) inputParam(interface{}) {
 	panic("unreachable")
 }

@@ -50,9 +50,11 @@ func (p *GPoolWithFunc) retrieveWorker() (w worker) {
 		p.lock.Unlock()
 	} else if capacity := p.Cap(); capacity == -1 || capacity > p.Running() {
 		// 创建一个新worker
+		fmt.Println("创建一个新worker")
 		p.lock.Unlock()
 		spawnWorker()
 	} else {
+		fmt.Println("已达上限，等待有worker放回")
 		// 已达上限，等待有worker放回
 	retry:
 
@@ -102,7 +104,7 @@ func (p *GPoolWithFunc) revertWorker(worker *goWorkerWithFunc) bool {
 	return true
 }
 
-func NewPoolWithFunc(size int, pf func(interface{})) (*GPoolWithFunc, error) {
+func NewPoolWithFunc(size int, pf func(interface{})) *GPoolWithFunc {
 	if size <= 0 {
 		size = -1
 	}
@@ -126,7 +128,7 @@ func NewPoolWithFunc(size int, pf func(interface{})) (*GPoolWithFunc, error) {
 	ctx, p.stopPurge = context.WithCancel(context.Background())
 	go p.purgeStaleWorkers(ctx)
 
-	return p, nil
+	return p
 }
 
 func (p *GPoolWithFunc) IsClosed() bool {
@@ -204,6 +206,8 @@ func (p *GPoolWithFunc) addWaiting(delta int) {
 
 // Invoke 唤醒一个任务
 func (p *GPoolWithFunc) Invoke(args interface{}) error {
+	fmt.Println("Invoke G")
+
 	if p.IsClosed() {
 		return errors.New("pool is closed")
 	}

@@ -9,7 +9,7 @@ ws_port: 8888
 ip_version: "tcp4"
 max_conn: 3000 # 最大连接数
 max_packet_size: 4096 # 数据包最大大小
-worker_pool_size: 100 # 业务工作Worker池的数量
+worker_pool_size: 10 # 业务工作Worker池的数量
 max_worker_task_len: 1024 # 业务工作Worker对应负责的任务队列最大任务存储数量
 heartbeat_interval: 10 # 心跳检测间隔时间(单位：秒)
 heartbeat_max_time: 30 # 最长心跳检测间隔时间(单位：秒)
