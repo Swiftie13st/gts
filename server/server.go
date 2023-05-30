@@ -8,9 +8,11 @@ package server
 
 import (
 	"fmt"
+	"github.com/gorilla/websocket"
 	"gts/iface"
 	"gts/utils"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 )
@@ -24,7 +26,8 @@ type Server struct {
 	//服务绑定的IP地址
 	IP string
 	//服务绑定的端口
-	Port int
+	Port   int
+	WsPort int
 	//当前Server的消息管理模块，用来绑定MsgId和对应的处理方法
 	msgHandler iface.IMsgHandle
 	//当前Server的链接管理器
@@ -37,9 +40,8 @@ type Server struct {
 
 	//心跳检测器
 	hb iface.IHeartbeat
-	// 限流
-	rateLimit iface.IRateLimit
 
+	sf *utils.SnowflakeGenerator
 	// 捕获链接关闭状态
 	exitChan chan struct{}
 }
@@ -51,84 +53,135 @@ func NewServer() iface.IServer {
 		IPVersion:  utils.Conf.IpVersion,
 		IP:         utils.Conf.Ip,
 		Port:       utils.Conf.Port,
+		WsPort:     utils.Conf.WsPort,
 		msgHandler: NewMsgHandle(),
 		ConnMgr:    NewConnManager(),
+		sf:         utils.NewSnowflakeGenerator(utils.Conf.WorkerId, utils.Conf.DatacenterId),
 	}
 
 	return s
 }
 
+func (s *Server) StartTcpServer() {
+	fmt.Printf("[START] Tcp Server listener at IP: %s, Port %d, is starting\n", s.IP, s.Port)
+	//1 获取一个TCP的Addr
+	addr, err := net.ResolveTCPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
+	if err != nil {
+		fmt.Println("resolve tcp addr err: ", err)
+		return
+	}
+
+	//2 监听服务器地址
+	listener, err := net.ListenTCP(s.IPVersion, addr)
+	if err != nil {
+		fmt.Println("listen", s.IPVersion, "err", err)
+		return
+	}
+
+	//已经监听成功
+	fmt.Println("start Gts server  ", s.Name, " success, now listening...")
+	//3 启动server网络连接业务
+	go func() {
+		for {
+			//服务器最大连接控制,如果超过最大连接，那么则关闭此新的连接
+			if s.ConnMgr.Len() >= utils.Conf.MaxConn {
+				fmt.Println("Exceeded the maxConn")
+				continue
+			}
+			//阻塞等待客户端建立连接请求
+			conn, err := listener.AcceptTCP()
+			if err != nil {
+				fmt.Println("Accept err ", err)
+				continue
+			}
+
+			//3.3 处理该新连接请求的 业务 方法， 此时应该有 handler 和 conn是绑定的
+			cid, err := s.sf.NextVal()
+			if err != nil {
+				fmt.Println("Id gen err ", err)
+				continue
+			}
+			dealConn := newServerConn(s, conn, cid)
+
+			//HeartBeat 心跳检测
+			if s.hb != nil {
+				//从Server端克隆一个心跳检测器
+				heartBeat := s.hb.Clone()
+				//绑定当前链接
+				heartBeat.BindConn(dealConn)
+			}
+
+			//3.4 启动当前链接的处理业务
+			go dealConn.Start()
+		}
+	}()
+	select {
+	case <-s.exitChan:
+		err := listener.Close()
+		if err != nil {
+			fmt.Println("listener close err: ", err)
+		}
+	}
+}
+
+func (s *Server) StartWebSocketServer() {
+	fmt.Printf("[START] WS Server listener at IP: %s, Port %d, is starting\n", s.IP, s.WsPort)
+
+	http.HandleFunc("/", s.upgradeWs)
+
+	err := http.ListenAndServe(fmt.Sprintf("%s:%d", s.IP, s.WsPort), nil)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (s *Server) upgradeWs(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("upgradeWs")
+	if len(r.Header.Get("Sec-Websocket-Protocol")) > 0 {
+		// todo Token校验
+	}
+
+	if s.ConnMgr.Len() >= utils.Conf.MaxConn {
+		fmt.Println("Exceeded the maxConn")
+		return
+	}
+
+	// 将HTTP连接升级为WebSocket连接
+	conn, err := (&websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		//token 校验
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+		Subprotocols: []string{r.Header.Get("Sec-WebSocket-Protocol")},
+	}).Upgrade(w, r, nil)
+	if err != nil {
+		fmt.Println("Upgrade WS err: ", err)
+		return
+	}
+	cid, err := s.sf.NextVal()
+	if err != nil {
+		fmt.Println("Id gen err ", err)
+		return
+	}
+	dealConn := newServerWsConn(s, conn, cid)
+	go dealConn.Start()
+}
+
 //============== 实现 iface.IServer 里的全部接口方法 ========
 
 func (s *Server) Start() {
-	sf := utils.NewSnowflakeGenerator(utils.Conf.WorkerId, utils.Conf.DatacenterId)
-	fmt.Printf("[START] Server listener at IP: %s, Port %d, is starting\n", s.IP, s.Port)
+
 	s.exitChan = make(chan struct{})
+
+	//0 启动worker工作池机制
+	s.msgHandler.StartWorkerPool()
+
 	//开启一个go去做服务端Listener业务
-	go func() {
-		//0 启动worker工作池机制
-		s.msgHandler.StartWorkerPool()
+	go s.StartTcpServer()
 
-		//1 获取一个TCP的Addr
-		addr, err := net.ResolveTCPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
-		if err != nil {
-			fmt.Println("resolve tcp addr err: ", err)
-			return
-		}
-
-		//2 监听服务器地址
-		listener, err := net.ListenTCP(s.IPVersion, addr)
-		if err != nil {
-			fmt.Println("listen", s.IPVersion, "err", err)
-			return
-		}
-
-		//已经监听成功
-		fmt.Println("start Gts server  ", s.Name, " success, now listening...")
-		//3 启动server网络连接业务
-		go func() {
-			for {
-				//服务器最大连接控制,如果超过最大连接，那么则关闭此新的连接
-				if s.ConnMgr.Len() >= utils.Conf.MaxConn {
-					fmt.Println("Exceeded the maxConn")
-					continue
-				}
-				//阻塞等待客户端建立连接请求
-				conn, err := listener.AcceptTCP()
-				if err != nil {
-					fmt.Println("Accept err ", err)
-					continue
-				}
-
-				//3.3 处理该新连接请求的 业务 方法， 此时应该有 handler 和 conn是绑定的
-				cid, err := sf.NextVal()
-				if err != nil {
-					fmt.Println("Id gen err ", err)
-					continue
-				}
-				dealConn := newServerConn(s, conn, cid)
-
-				//HeartBeat 心跳检测
-				if s.hb != nil {
-					//从Server端克隆一个心跳检测器
-					heartBeat := s.hb.Clone()
-					//绑定当前链接
-					heartBeat.BindConn(dealConn)
-				}
-
-				//3.4 启动当前链接的处理业务
-				go dealConn.Start()
-			}
-		}()
-		select {
-		case <-s.exitChan:
-			err := listener.Close()
-			if err != nil {
-				fmt.Println("listener close err: ", err)
-			}
-		}
-	}()
-
+	go s.StartWebSocketServer()
 }
 
 func (s *Server) Stop() {
@@ -190,14 +243,5 @@ func (s *Server) GetHeartBeat() iface.IHeartbeat {
 func (s *Server) StartHeartBeat() {
 	hb := NewHeartbeat(utils.Conf.GetHeartbeatInterval())
 	s.AddRouter(hb.GetMsgID(), hb.GetRouter())
-	s.hb = hb
-}
-func (s *Server) GetRateLimit() iface.IRateLimit {
-	return s.rateLimit
-}
-
-// StartRateLimit 启动限流
-func (s *Server) StartRateLimit() {
-	hb := NewHeartbeat(utils.Conf.GetHeartbeatInterval())
 	s.hb = hb
 }

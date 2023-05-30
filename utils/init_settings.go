@@ -20,8 +20,10 @@ type AppConfig struct {
 	Name              string `mapstructure:"name"`
 	Version           string `mapstructure:"version"`
 	StartTime         string `mapstructure:"start_time"`
+	NetMode           int    `mapstructure:"net_mode"`
 	Ip                string `mapstructure:"ip"`
 	Port              int    `mapstructure:"port"`
+	WsPort            int    `mapstructure:"ws_port"`
 	IpVersion         string `mapstructure:"ip_version"`
 	MaxConn           int    `mapstructure:"max_conn"`
 	MaxPacketSize     uint32 `mapstructure:"max_packet_size"`

@@ -15,7 +15,7 @@ type IServer interface {
 	// Serve 开启业务服务方法
 	Serve()
 	// AddRouter 路由功能：给当前服务注册一个路由业务方法，供客户端链接处理使用
-	AddRouter(msgid uint32, router IRouter)
+	AddRouter(uint32, IRouter)
 	// GetConnMgr 得到链接管理
 	GetConnMgr() IConnManager
 	// GetMsgHandler 得到消息处理器

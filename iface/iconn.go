@@ -6,7 +6,10 @@
 
 package iface
 
-import "net"
+import (
+	"github.com/gorilla/websocket"
+	"net"
+)
 
 // IConnection 定义连接接口
 type IConnection interface {
@@ -16,6 +19,8 @@ type IConnection interface {
 	Stop()
 	// GetTCPConnection 从当前连接获取原始的socket TCPConn
 	GetTCPConnection() *net.TCPConn
+	// GetWSConnection 从当前连接获取原始的socket WSConn
+	GetWSConnection() *websocket.Conn
 	// GetConnID 获取当前连接ID
 	GetConnID() uint64
 	// RemoteAddr 获取远程客户端地址信息

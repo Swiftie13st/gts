@@ -14,7 +14,6 @@ GTS(Go Tcp Server)使用golang编写的一个轻量级、高性能TCP服务器�
 
 ## TODO
 
-1. 限制并发连接数：通过限制服务器的并发连接数，可以防止服务器因为过多的连接而耗尽资源。 
-2. 使用高性能的网络库，如 [evio](https://github.com/tidwall/evio) 或 [gnet](https://github.com/panjf2000/gnet)，可以提高服务器的性能。这些库经过优化，以减少内存分配和垃圾回收开销。
-3. 增加UDP、Websocket等网络协议
-4. 优化数据处理，使用protobuf等
+1. 使用高性能的网络库，如 [evio](https://github.com/tidwall/evio) 或 [gnet](https://github.com/panjf2000/gnet)，可以提高服务器的性能。这些库经过优化，以减少内存分配和垃圾回收开销。
+2. 增加UDP、Websocket等网络协议
+3. 优化数据处理，使用protobuf等

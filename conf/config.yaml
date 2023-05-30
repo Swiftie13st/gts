@@ -2,8 +2,10 @@ name: "gts"
 mode: "dev"
 version: "v1.0.0"
 start_time: "2023-3-17"
+net_mode: 0 # 0 tcp + ws, 1 tcp, 2 ws
 ip: "0.0.0.0"
 port: 7777
+ws_port: 8888
 ip_version: "tcp4"
 max_conn: 3000 # 最大连接数
 max_packet_size: 4096 # 数据包最大大小

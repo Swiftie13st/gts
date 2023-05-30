@@ -69,7 +69,7 @@ func (c *Client) Start() {
 		}
 		//创建Connection对象
 		c.conn = newClientConn(c, conn)
-		fmt.Printf("[START] Client at IP: %c, Port %d, is starting\n", c.IP, c.Port)
+		fmt.Printf("[START] Client at IP: %v, Port %d, is starting\n", c.IP, c.Port)
 		//HeartBeat心跳检测
 		if c.hb != nil {
 			//创建链接成功，绑定链接与心跳检测器

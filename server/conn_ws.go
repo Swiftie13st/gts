@@ -13,16 +13,16 @@ import (
 	"gts/iface"
 	"gts/utils"
 	"io"
+	"log"
 	"net"
 	"sync"
 	"time"
 )
 
-type Connection struct {
+type WsConnection struct {
+	lock sync.RWMutex
 
-	//当前连接的socket TCP套接字
-	Conn   *net.TCPConn
-	WsConn *websocket.Conn
+	Conn *websocket.Conn
 	//当前连接的ID 也可以称作为SessionID，ID全局唯一
 	ConnID uint64
 	//当前连接的关闭状态
@@ -57,9 +57,9 @@ type Connection struct {
 	lastActivityTime time.Time
 }
 
-// newServerConn 创建连接的方法
-func newServerConn(server iface.IServer, conn *net.TCPConn, connID uint64) iface.IConnection {
-	c := &Connection{
+// newServerWsConn 创建WebSocket连接的方法
+func newServerWsConn(server iface.IServer, conn *websocket.Conn, connID uint64) iface.IConnection {
+	c := &WsConnection{
 		Conn:         conn,
 		ConnID:       connID,
 		isClosed:     false,
@@ -75,10 +75,9 @@ func newServerConn(server iface.IServer, conn *net.TCPConn, connID uint64) iface
 	return c
 }
 
-// newClientConn 创建连接的方法
-func newClientConn(client iface.IClient, conn *net.TCPConn) iface.IConnection {
+func newClientWsConn(client iface.IClient, conn *websocket.Conn) iface.IConnection {
 	c := &Connection{
-		Conn:         conn,
+		WsConn:       conn,
 		ConnID:       0,
 		isClosed:     false,
 		ExitBuffChan: make(chan bool, 1),
@@ -92,7 +91,7 @@ func newClientConn(client iface.IClient, conn *net.TCPConn) iface.IConnection {
 }
 
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
-func (c *Connection) StartWriter() {
+func (c *WsConnection) StartWriter() {
 
 	defer fmt.Println(c.RemoteAddr().String(), " conn Writer exit!")
 	defer c.Stop()
@@ -102,7 +101,7 @@ func (c *Connection) StartWriter() {
 		case data := <-c.msgChan:
 			fmt.Println("StartWriter msgChan")
 			//有数据要写给客户端
-			if _, err := c.Conn.Write(data); err != nil {
+			if err := c.Conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
 				fmt.Println("Send Data error:, ", err, " Conn Writer exit")
 				return
 			}
@@ -115,7 +114,7 @@ func (c *Connection) StartWriter() {
 }
 
 // StartReader 读消息Goroutine，用于从客户端中读取数据
-func (c *Connection) StartReader() {
+func (c *WsConnection) StartReader() {
 	fmt.Println("Reader Goroutine is  running")
 	defer fmt.Println(c.RemoteAddr().String(), " conn reader exit!")
 	defer c.Stop()
@@ -125,8 +124,9 @@ func (c *Connection) StartReader() {
 		dp := NewDataPack()
 
 		//读取客户端的Msg head
-		headData := make([]byte, dp.GetHeadLen())
-		if _, err := io.ReadFull(c.GetTCPConnection(), headData); err != nil {
+		//headData := make([]byte, dp.GetHeadLen())
+		headData, err := c.read()
+		if err != nil {
 			fmt.Println("read msg head error ", err)
 			c.ExitBuffChan <- true
 			continue
@@ -176,8 +176,26 @@ func (c *Connection) StartReader() {
 	}
 }
 
+func (c *WsConnection) read() ([]byte, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	if c.isClosed {
+		return nil, errors.New("conn close,reader")
+	}
+	_, message, err := c.Conn.ReadMessage()
+	if err != nil {
+		if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			log.Printf("error: %v", err)
+		} else {
+			log.Println("其他", err)
+		}
+		return nil, err
+	}
+	return message, err
+}
+
 // Start 启动连接，让当前连接开始工作
-func (c *Connection) Start() {
+func (c *WsConnection) Start() {
 	fmt.Println("Conn Start(), ConnID = ", c.ConnID)
 
 	//启动心跳检测
@@ -202,7 +220,7 @@ func (c *Connection) Start() {
 }
 
 // Stop 停止连接，结束当前连接状态M
-func (c *Connection) Stop() {
+func (c *WsConnection) Stop() {
 	fmt.Println("Conn Stop(), ConnID = ", c.ConnID)
 	//如果当前链接已经关闭
 	if c.isClosed == true {
@@ -230,32 +248,32 @@ func (c *Connection) Stop() {
 }
 
 // GetTCPConnection 从当前连接获取原始的socket TCPConn
-func (c *Connection) GetTCPConnection() *net.TCPConn {
-	return c.Conn
-}
-
-func (c *Connection) GetWSConnection() *websocket.Conn {
+func (c *WsConnection) GetTCPConnection() *net.TCPConn {
 	return nil
 }
 
+func (c *WsConnection) GetWSConnection() *websocket.Conn {
+	return c.Conn
+}
+
 // GetConnID 获取当前连接ID
-func (c *Connection) GetConnID() uint64 {
+func (c *WsConnection) GetConnID() uint64 {
 	return c.ConnID
 }
 
 // RemoteAddr 获取远程客户端地址信息
-func (c *Connection) RemoteAddr() net.Addr {
+func (c *WsConnection) RemoteAddr() net.Addr {
 
 	return c.Conn.RemoteAddr()
 }
 
 // LocalAddr 获取链接本地地址信息
-func (c *Connection) LocalAddr() net.Addr {
+func (c *WsConnection) LocalAddr() net.Addr {
 	return c.Conn.LocalAddr()
 }
 
 // Send 直接将数据封包发送数据给远程的TCP客户端
-func (c *Connection) Send(msgId uint32, data []byte) error {
+func (c *WsConnection) Send(msgId uint32, data []byte) error {
 	c.msgLock.RLock()
 	defer c.msgLock.RUnlock()
 	if c.isClosed == true {
@@ -276,7 +294,7 @@ func (c *Connection) Send(msgId uint32, data []byte) error {
 }
 
 // callOnConnStart 调用连接OnConnStart Hook函数
-func (c *Connection) callOnConnStart() {
+func (c *WsConnection) callOnConnStart() {
 	if c.onConnStart != nil {
 		fmt.Println("CallOnConnStart....")
 		c.onConnStart(c)
@@ -284,7 +302,7 @@ func (c *Connection) callOnConnStart() {
 }
 
 // callOnConnStart 调用连接OnConnStop Hook函数
-func (c *Connection) callOnConnStop() {
+func (c *WsConnection) callOnConnStop() {
 	if c.onConnStop != nil {
 		fmt.Println("CallOnConnStop....")
 		c.onConnStop(c)
@@ -292,7 +310,7 @@ func (c *Connection) callOnConnStop() {
 }
 
 // SetProperty 设置链接属性
-func (c *Connection) SetProperty(key string, value interface{}) {
+func (c *WsConnection) SetProperty(key string, value interface{}) {
 	c.propertyLock.Lock()
 	defer c.propertyLock.Unlock()
 	if c.property == nil {
@@ -303,7 +321,7 @@ func (c *Connection) SetProperty(key string, value interface{}) {
 }
 
 // GetProperty 获取链接属性
-func (c *Connection) GetProperty(key string) (interface{}, error) {
+func (c *WsConnection) GetProperty(key string) (interface{}, error) {
 	c.propertyLock.Lock()
 	defer c.propertyLock.Unlock()
 
@@ -315,18 +333,18 @@ func (c *Connection) GetProperty(key string) (interface{}, error) {
 }
 
 // RemoveProperty 移除链接属性
-func (c *Connection) RemoveProperty(key string) {
+func (c *WsConnection) RemoveProperty(key string) {
 	c.propertyLock.Lock()
 	defer c.propertyLock.Unlock()
 
 	delete(c.property, key)
 }
 
-func (c *Connection) SetHeartBeat(hb iface.IHeartbeat) {
+func (c *WsConnection) SetHeartBeat(hb iface.IHeartbeat) {
 	c.hb = hb
 }
 
-func (c *Connection) IsAlive() bool {
+func (c *WsConnection) IsAlive() bool {
 	if c.isClosed {
 		return false
 	}
@@ -336,6 +354,6 @@ func (c *Connection) IsAlive() bool {
 	return lastTimeInterval < utils.Conf.GetHeartbeatMaxTime()
 }
 
-func (c *Connection) updateActivity() {
+func (c *WsConnection) updateActivity() {
 	c.lastActivityTime = time.Now()
 }
