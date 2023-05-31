@@ -31,7 +31,7 @@ func (cr *ClientRouter) Handle(request iface.IRequest) {
 }
 
 /*
-	模拟客户端
+模拟客户端
 */
 func ClientTest() {
 
@@ -65,7 +65,7 @@ func ClientTest() {
 		}
 		fmt.Println("send: ", msg, msg2)
 		//向服务器端写数据
-		conn.Write(msg)
+		//conn.Write(msg)
 		conn.Write(msg2)
 
 	}
@@ -77,13 +77,15 @@ func ClientTest() {
 func recvMsg(conn net.Conn) {
 	dp := server.NewDataPack()
 	for {
+
 		//先读出流中的head部分
 		headData := make([]byte, dp.GetHeadLen())
 		_, err := io.ReadFull(conn, headData) //ReadFull 会把msg填充满为止
 		if err != nil {
-			fmt.Println("read head error")
+			fmt.Println("read head error: ", err)
 			break
 		}
+		fmt.Println(string(headData))
 		//将headData字节流 拆包到msg中
 		msgHead, err := dp.Unpack(headData)
 		if err != nil {
@@ -123,16 +125,16 @@ func handleClientStart(conn iface.IConnection) {
 
 }
 
-//Server 模块的测试函数
+// Server 模块的测试函数
 func TestServer(t *testing.T) {
-	client := server.NewClient("127.0.0.1", 7777)
-
-	client.AddRouter(1, &ClientRouter{})
-	//启动心跳检测
-	//client.StartHeartBeat()
-
-	client.SetOnConnStart(handleClientStart)
-	client.Start()
-	//ClientTest()
+	//client := server.NewClient("127.0.0.1", 7777)
+	//
+	//client.AddRouter(1, &ClientRouter{})
+	////启动心跳检测
+	////client.StartHeartBeat()
+	//
+	//client.SetOnConnStart(handleClientStart)
+	//client.Start()
+	ClientTest()
 	select {}
 }

@@ -18,3 +18,4 @@ GTS(Go Tcp Server)使用golang编写的一个轻量级、高性能TCP服务器�
 1. 使用高性能的网络库，如 [evio](https://github.com/tidwall/evio) 或 [gnet](https://github.com/panjf2000/gnet)，可以提高服务器的性能。这些库经过优化，以减少内存分配和垃圾回收开销。
 2. 增加UDP、Websocket等网络协议
 3. 优化数据处理，使用protobuf等
+4. 添加身份认证模块

@@ -73,11 +73,11 @@ func (dp *DataPack) Unpack(binaryData []byte) (iface.IMessage, error) {
 	if utils.Conf.MaxPacketSize > 0 && msg.DataLen > utils.Conf.MaxPacketSize {
 		return nil, errors.New("too large msg data recieved")
 	}
-
-	msg.Data = make([]byte, msg.DataLen)
-	if err := binary.Read(dataBuff, binary.LittleEndian, &msg.Data); err != nil {
-		return nil, err
-	}
+	// todo
+	//msg.Data = make([]byte, msg.DataLen)
+	//if err := binary.Read(dataBuff, binary.LittleEndian, &msg.Data); err != nil {
+	//	return nil, err
+	//}
 
 	//这里只需要把head的数据拆包出来就可以了，然后再通过head的长度，再从conn读取一次数据
 	return msg, nil

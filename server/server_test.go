@@ -33,3 +33,11 @@ func TestNewServer(t *testing.T) {
 	s.AddRouter(1, &PingRouter{})
 	s.Serve()
 }
+
+func TestNewGServer(t *testing.T) {
+	utils.InitSettings("../conf/config.yaml")
+	s := NewGServer()
+
+	s.AddRouter(1, &PingRouter{})
+	s.Serve()
+}
