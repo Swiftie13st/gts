@@ -241,12 +241,8 @@ func (c *WsConnection) Stop() {
 	//close(c.msgChan)
 }
 
-// GetTCPConnection 从当前连接获取原始的socket TCPConn
-func (c *WsConnection) GetTCPConnection() *net.TCPConn {
-	return nil
-}
-
-func (c *WsConnection) GetWSConnection() *websocket.Conn {
+// GetConnection 从当前连接获取原始的ws coon
+func (c *WsConnection) GetConnection() interface{} {
 	return c.Conn
 }
 

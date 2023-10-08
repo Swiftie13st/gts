@@ -137,7 +137,7 @@ func (h *Heartbeat) check() (err error) {
 	return err
 }
 
-// BindConn 绑定一个链接
+// BindConn 绑定一个链接 TODO 多个链接？
 func (h *Heartbeat) BindConn(conn iface.IConnection) {
 	fmt.Println("BindConn: ", conn.GetConnID())
 	h.conn = conn

@@ -126,7 +126,7 @@ func (c *Connection) StartReader() {
 
 		//读取客户端的Msg head
 		headData := make([]byte, dp.GetHeadLen())
-		if _, err := io.ReadFull(c.GetTCPConnection(), headData); err != nil {
+		if _, err := io.ReadFull(c.GetConnection().(*net.TCPConn), headData); err != nil {
 			fmt.Println("read msg head error ", err)
 			c.ExitBuffChan <- true
 			continue
@@ -145,7 +145,7 @@ func (c *Connection) StartReader() {
 		var data []byte
 		if msg.GetDataLen() > 0 {
 			data = make([]byte, msg.GetDataLen())
-			if _, err := io.ReadFull(c.GetTCPConnection(), data); err != nil {
+			if _, err := io.ReadFull(c.GetConnection().(*net.TCPConn), data); err != nil {
 				fmt.Println("read msg data error ", err)
 				c.ExitBuffChan <- true
 				continue
@@ -229,6 +229,10 @@ func (c *Connection) Stop() {
 	c.ExitBuffChan <- true
 	//close(c.ExitBuffChan)
 	//close(c.msgChan)
+}
+
+func (c *Connection) GetConnection() interface{} {
+	return c.Conn
 }
 
 // GetTCPConnection 从当前连接获取原始的socket TCPConn

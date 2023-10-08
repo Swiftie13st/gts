@@ -22,6 +22,7 @@ type AppConfig struct {
 	StartTime         string `mapstructure:"start_time"`
 	TCPMode           bool   `mapstructure:"tcp_mode"`
 	WSMode            bool   `mapstructure:"ws_mode"`
+	QuicMode          bool   `mapstructure:"quic_mode"`
 	Ip                string `mapstructure:"ip"`
 	Port              int    `mapstructure:"port"`
 	WsPort            int    `mapstructure:"ws_port"`
