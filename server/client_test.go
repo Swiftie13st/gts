@@ -7,11 +7,15 @@
 package server
 
 import (
+	"context"
+	"crypto/tls"
 	"fmt"
 	"github.com/gorilla/websocket"
+	"github.com/quic-go/quic-go"
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 )
 
 func TestClient_WS(t *testing.T) {
@@ -53,4 +57,53 @@ func read(c *websocket.Conn) {
 		}
 		fmt.Printf("msgId:%d,recv: %s", img.GetMsgId(), img.GetData())
 	}
+}
+
+func TestClient_Quic(t *testing.T) {
+	ctx := context.Background()
+	addr := "localhost:7777"
+	tlsConf := &tls.Config{
+		InsecureSkipVerify: true,
+		NextProtos:         []string{"quic-echo-example"},
+	}
+
+	session, err := quic.DialAddr(ctx, addr, tlsConf, nil)
+	if err != nil {
+		fmt.Println("quic dial addr error", err)
+		return
+	}
+	stream, err := session.OpenStream()
+	if err != nil {
+		fmt.Println("quic open stream error", err)
+		return
+	}
+	defer stream.Close()
+	data := []byte("Hello, server!")
+
+	db := NewDataPack()
+	pack, err := db.Pack(NewMsgPackage(1, data))
+	if err != nil {
+		fmt.Println("pack err", err)
+		return
+	}
+
+	for i := 0; i < 4; i++ {
+		n, err := stream.Write(pack)
+		if err != nil {
+			fmt.Println("send pack err", err)
+			return
+		}
+		fmt.Println("send pack", pack, n)
+		time.Sleep(time.Second * 2)
+
+		buf := make([]byte, 1024)
+		n, err = stream.Read(buf)
+		if err != nil {
+			fmt.Println("quic io read error", err, n)
+			return
+		}
+
+		fmt.Printf("Received message: %s\n", string(buf[:n]))
+	}
+
 }

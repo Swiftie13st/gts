@@ -7,6 +7,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
@@ -87,6 +88,12 @@ func (c *ConnectionQuic) StartWriter() {
 		case data := <-c.msgChan:
 			fmt.Println("StartWriter msgChan: ", data)
 			err := c.Conn.SendMessage(data)
+			stream, err := c.Conn.OpenStream()
+			if err != nil {
+				fmt.Println("OpenStream err: ", err)
+				return
+			}
+			_, err = stream.Write(data)
 			if err != nil {
 				fmt.Println("Send Data error:, ", err, " Conn Writer exit")
 				return
@@ -104,15 +111,34 @@ func (c *ConnectionQuic) StartReader() {
 	fmt.Println("Reader Goroutine is  running")
 	defer fmt.Println(c.RemoteAddr().String(), " conn reader exit!")
 	defer c.Stop()
-
 	for {
 		// 创建拆包解包的对象
 		dp := NewDataPack()
 
-		//读取客户端的Msg head
+		conn, ok := c.GetConnection().(*quic.Connection)
+		if !ok {
+			fmt.Println("get quic conn err", c.GetConnection())
+			c.ExitBuffChan <- true
+			return
+		}
+		//(*conn).SendMessage()
 
-		conn := *c.GetGConnection()
-		size, headData := conn.ReadN(int(dp.GetHeadLen()))
+		stream, err := (*conn).AcceptStream(context.Background())
+		if err != nil {
+			fmt.Println("get quic stream err : ", err)
+			c.ExitBuffChan <- true
+			return
+		}
+
+		fmt.Println("ready to read ")
+		data1 := []byte("Hello, server!")
+		_, err = stream.Write(data1)
+		if err != nil {
+			return
+		}
+
+		headData := make([]byte, dp.GetHeadLen())
+		size, err := stream.Read(headData)
 		if size != int(dp.GetHeadLen()) {
 			fmt.Println("read msg head length err, length : ", size)
 			c.ExitBuffChan <- true
@@ -130,16 +156,17 @@ func (c *ConnectionQuic) StartReader() {
 		}
 
 		//根据 dataLen 读取 data，放在msg.Data中
-		var data []byte
+		data := make([]byte, msg.GetDataLen())
 		if msg.GetDataLen() > 0 {
-			size, data = conn.ReadN(int(msg.GetDataLen()))
-			if size != int(msg.GetDataLen()) {
-				fmt.Println("read msg data length err, length : ", size)
+			size, err = stream.Read(data)
+			if err != nil || size != int(msg.GetDataLen()) {
+				fmt.Println("read msg data length err, length : , err: ", size, err)
 				c.ExitBuffChan <- true
 				return
 			}
 		}
 		msg.SetData(data)
+		fmt.Println("data", string(data))
 		if msg.GetMsgId() == iface.HeartBeatDefaultMsgID {
 			//心跳检测数据，更新心跳检测Active状态
 			fmt.Println("心跳检测数据，更新心跳检测Active状态")

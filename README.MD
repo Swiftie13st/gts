@@ -7,7 +7,7 @@ GTS(Go Tcp Server)使用golang编写的一个轻量级、高性能TCP服务器�
 3. 仿造[ants](https://github.com/panjf2000/ants)实现协程池进行资源复用，减少内存分配的频率，提高执行效率。
 4. 通过心跳检测机制监测双方连接状态。
 5. 通过雪花算法分配连接id。
-6. 支持TCP、WebSocket协议
+6. 支持TCP、WebSocket、Quic协议
 7. 
 
 ## 架构设计

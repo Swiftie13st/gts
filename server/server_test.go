@@ -22,7 +22,7 @@ func (pr *PingRouter) Handle(request iface.IRequest) {
 	fmt.Println("Call PingRouter Handle")
 	err := request.GetConnection().Send(1, []byte("ping...ping...ping\n"))
 	if err != nil {
-		fmt.Println("call back ping ping ping error")
+		fmt.Println("call back ping ping ping error", err)
 	}
 }
 
