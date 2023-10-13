@@ -59,6 +59,7 @@ func (mh *MsgHandle) AddRouter(msgId uint32, router iface.IRouter) {
 // SendMsgToTaskQueue 将消息交给TaskQueue,由worker进行处理
 func (mh *MsgHandle) SendMsgToTaskQueue(request iface.IRequest) {
 	// 直接从池中取一个worker发送就好
+	fmt.Println("SendMsgToTaskQueue Invoke")
 	err := mh.workerPool.Invoke(request)
 	if err != nil {
 		fmt.Println("Invoke err: ", err)

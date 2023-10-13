@@ -77,7 +77,12 @@ func TestClient_Quic(t *testing.T) {
 		fmt.Println("quic open stream error", err)
 		return
 	}
-	defer stream.Close()
+	defer func(stream quic.Stream) {
+		err := stream.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(stream)
 	data := []byte("Hello, server!")
 
 	db := NewDataPack()
@@ -86,6 +91,20 @@ func TestClient_Quic(t *testing.T) {
 		fmt.Println("pack err", err)
 		return
 	}
+
+	go func() {
+		for {
+			buf := make([]byte, 1024)
+			n, err := stream.Read(buf)
+			if err != nil {
+				fmt.Println("quic io read error", err, n)
+				return
+			}
+
+			fmt.Printf("Received message: %s\n", string(buf[:n]))
+		}
+
+	}()
 
 	for i := 0; i < 4; i++ {
 		n, err := stream.Write(pack)
@@ -96,14 +115,6 @@ func TestClient_Quic(t *testing.T) {
 		fmt.Println("send pack", pack, n)
 		time.Sleep(time.Second * 2)
 
-		buf := make([]byte, 1024)
-		n, err = stream.Read(buf)
-		if err != nil {
-			fmt.Println("quic io read error", err, n)
-			return
-		}
-
-		fmt.Printf("Received message: %s\n", string(buf[:n]))
 	}
-
+	time.Sleep(time.Second * 10)
 }

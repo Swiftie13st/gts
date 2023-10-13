@@ -67,7 +67,7 @@ func newQuicServerConn(server iface.IServer, conn quic.Connection, connID uint64
 		isClosed:     false,
 		ExitBuffChan: make(chan bool, 1),
 		MsgHandler:   server.GetMsgHandler(),
-		msgChan:      make(chan []byte, 1024),
+		msgChan:      make(chan []byte),
 		connManager:  server.GetConnMgr(),
 		onConnStart:  server.GetOnConnStart(),
 		onConnStop:   server.GetOnConnStop(),
@@ -82,17 +82,15 @@ func (c *ConnectionQuic) StartWriter() {
 	fmt.Println("Writer Goroutine is  running")
 	defer fmt.Println(c.RemoteAddr().String(), " conn Writer exit!")
 	defer c.Stop()
-
+	stream, err := c.Conn.OpenStream()
+	if err != nil {
+		fmt.Println("OpenStream err: ", err)
+		return
+	}
 	for {
 		select {
 		case data := <-c.msgChan:
 			fmt.Println("StartWriter msgChan: ", data)
-			err := c.Conn.SendMessage(data)
-			stream, err := c.Conn.OpenStream()
-			if err != nil {
-				fmt.Println("OpenStream err: ", err)
-				return
-			}
 			_, err = stream.Write(data)
 			if err != nil {
 				fmt.Println("Send Data error:, ", err, " Conn Writer exit")
@@ -111,24 +109,24 @@ func (c *ConnectionQuic) StartReader() {
 	fmt.Println("Reader Goroutine is  running")
 	defer fmt.Println(c.RemoteAddr().String(), " conn reader exit!")
 	defer c.Stop()
+	// 创建拆包解包的对象
+	dp := NewDataPack()
+
+	conn, ok := c.GetConnection().(*quic.Connection)
+	if !ok {
+		fmt.Println("get quic conn err", c.GetConnection())
+		c.ExitBuffChan <- true
+		return
+	}
+	//(*conn).SendMessage()
+
+	stream, err := (*conn).AcceptStream(context.Background())
+	if err != nil {
+		fmt.Println("get quic stream err : ", err)
+		c.ExitBuffChan <- true
+		return
+	}
 	for {
-		// 创建拆包解包的对象
-		dp := NewDataPack()
-
-		conn, ok := c.GetConnection().(*quic.Connection)
-		if !ok {
-			fmt.Println("get quic conn err", c.GetConnection())
-			c.ExitBuffChan <- true
-			return
-		}
-		//(*conn).SendMessage()
-
-		stream, err := (*conn).AcceptStream(context.Background())
-		if err != nil {
-			fmt.Println("get quic stream err : ", err)
-			c.ExitBuffChan <- true
-			return
-		}
 
 		fmt.Println("ready to read ")
 		data1 := []byte("Hello, server!")
@@ -296,10 +294,8 @@ func (c *ConnectionQuic) Send(msgId uint32, data []byte) error {
 		fmt.Println("Pack error msg id = ", msgId)
 		return errors.New("Pack error msg ")
 	}
-
 	//写回客户端
 	c.msgChan <- msg
-
 	return nil
 }
 
