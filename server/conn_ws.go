@@ -132,7 +132,7 @@ func (c *WsConnection) StartReader() {
 		fmt.Println("recv data: ", string(headData))
 
 		//拆包，得到msgid 和 datalen 放在msg中
-		msg, err := dp.Unpack(headData)
+		msg, err := dp.UnpackHead(headData)
 		if err != nil {
 			fmt.Println("unpack err ", err)
 			c.ExitBuffChan <- true

@@ -74,10 +74,36 @@ func (dp *DataPack) Unpack(binaryData []byte) (iface.IMessage, error) {
 		return nil, errors.New("too large msg data recieved")
 	}
 	// todo
-	//msg.Data = make([]byte, msg.DataLen)
-	//if err := binary.Read(dataBuff, binary.LittleEndian, &msg.Data); err != nil {
-	//	return nil, err
-	//}
+	msg.Data = make([]byte, msg.DataLen)
+	if err := binary.Read(dataBuff, binary.LittleEndian, &msg.Data); err != nil {
+		return nil, err
+	}
+
+	return msg, nil
+}
+
+// UnpackHead 拆包方法(只解压数据头部)
+func (dp *DataPack) UnpackHead(binaryData []byte) (iface.IMessage, error) {
+	//创建一个从输入二进制数据的ioReader
+	dataBuff := bytes.NewReader(binaryData)
+
+	//只解压head的信息，得到dataLen和msgID
+	msg := &Message{}
+
+	//读dataLen
+	if err := binary.Read(dataBuff, binary.LittleEndian, &msg.DataLen); err != nil {
+		return nil, err
+	}
+
+	//读msgID
+	if err := binary.Read(dataBuff, binary.LittleEndian, &msg.Id); err != nil {
+		return nil, err
+	}
+
+	//判断dataLen的长度是否超出我们允许的最大包长度
+	if utils.Conf.MaxPacketSize > 0 && msg.DataLen > utils.Conf.MaxPacketSize {
+		return nil, errors.New("too large msg data recieved")
+	}
 
 	//这里只需要把head的数据拆包出来就可以了，然后再通过head的长度，再从conn读取一次数据
 	return msg, nil

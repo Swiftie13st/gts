@@ -7,7 +7,24 @@ import (
 	"testing"
 )
 
-//测试datapack拆包，封包功能的单测
+func TestPack(t *testing.T) {
+	dp := NewDataPack()
+	msg := NewMsgPackage(1, []byte("dada1313"))
+	pack, err := dp.Pack(msg)
+	if err != nil {
+		fmt.Println("err: ", err)
+		return
+	}
+	fmt.Println(string(pack))
+	unpack, err := dp.Unpack(pack)
+	if err != nil {
+		fmt.Println("err: ", err)
+		return
+	}
+	fmt.Println(unpack, string(unpack.GetData()))
+}
+
+// 测试datapack拆包，封包功能的单测
 func TestDataPack(t *testing.T) {
 	//创建socket TCP Server
 	listener, err := net.Listen("tcp", "127.0.0.1:7777")
