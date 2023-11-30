@@ -77,7 +77,9 @@ func (s *Server) Start() {
 	if utils.Conf.QuicMode {
 		go s.startQuicServer(context.Background())
 	}
-
+	if utils.Conf.KCPMode {
+		go s.startKCPServer()
+	}
 }
 
 func (s *Server) Stop() {

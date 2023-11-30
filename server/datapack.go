@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"gts/iface"
 	"gts/utils"
 )
@@ -71,7 +72,7 @@ func (dp *DataPack) Unpack(binaryData []byte) (iface.IMessage, error) {
 
 	//判断dataLen的长度是否超出我们允许的最大包长度
 	if utils.Conf.MaxPacketSize > 0 && msg.DataLen > utils.Conf.MaxPacketSize {
-		return nil, errors.New("too large msg data recieved")
+		return nil, errors.New(fmt.Sprint("too large msg data recieved DataLen ", msg.DataLen, " MaxDataLen ", utils.Conf.MaxPacketSize))
 	}
 	// todo
 	msg.Data = make([]byte, msg.DataLen)

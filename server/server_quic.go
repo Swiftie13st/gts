@@ -1,7 +1,7 @@
 /**
   @author: Bruce
   @since: 2023/11/30
-  @desc: //TODO
+  @desc: //Quic
 **/
 
 package server
@@ -25,9 +25,10 @@ func (s *Server) startQuicServer(ctx context.Context) {
 
 	listener, err := quic.ListenAddr(addr, generateTLSConfig(), nil)
 	if err != nil {
-		fmt.Println("listen quic", s.IPVersion, "err", err)
+		fmt.Println("listen quic", addr, "err", err)
 		return
 	}
+
 	//已经监听成功
 	fmt.Println("start Gts quic server  ", s.Name, " success, now listening...")
 	//3 启动server网络连接业务

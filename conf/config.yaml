@@ -4,7 +4,8 @@ version: "v1.0.0"
 start_time: "2023-3-17"
 tcp_mode: false
 ws_mode: false
-quic_mode: true
+quic_mode: false
+kcp_mode: true
 ip: "0.0.0.0"
 port: 7777
 ws_port: 8888

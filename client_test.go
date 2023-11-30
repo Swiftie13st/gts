@@ -1,12 +1,17 @@
 package main
 
 import (
+	"crypto/sha1"
 	"fmt"
+	"github.com/xtaci/kcp-go"
+	"golang.org/x/crypto/pbkdf2"
 	"gts/iface"
 	"gts/server"
 	"io"
+	"log"
 	"net"
 	"testing"
+	"time"
 )
 
 // ClientRouter  自定义路由
@@ -26,7 +31,7 @@ func (cr *ClientRouter) Handle(request iface.IRequest) {
 	if err != nil {
 		return
 	}
-	go recvMsg(request.GetConnection().GetTCPConnection())
+	go recvMsg(request.GetConnection().GetConnection().(*net.TCPConn))
 	select {}
 }
 
@@ -137,4 +142,44 @@ func TestServer(t *testing.T) {
 	//client.Start()
 	ClientTest()
 	select {}
+}
+
+func TestKCPClient(t *testing.T) {
+	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
+	block, _ := kcp.NewAESBlockCrypt(key)
+
+	// wait for server to become ready
+	time.Sleep(time.Second)
+
+	// dial to the echo server
+	if sess, err := kcp.DialWithOptions("127.0.0.1:7777", block, 10, 3); err == nil {
+		for {
+			data := time.Now().String()
+			buf := make([]byte, len(data))
+
+			//创建一个封包对象 dp
+			dp := server.NewDataPack()
+
+			msg, err := dp.Pack(server.NewMsgPackage(1, []byte(data)))
+			if err != nil {
+				fmt.Println("Pack error msg id = ", 1)
+				return
+			}
+
+			log.Println("sent:", msg)
+			if _, err := sess.Write(msg); err == nil {
+				// read back the data
+				if _, err := io.ReadFull(sess, buf); err == nil {
+					log.Println("recv:", string(buf))
+				} else {
+					log.Fatal(err)
+				}
+			} else {
+				log.Fatal(err)
+			}
+			time.Sleep(time.Second)
+		}
+	} else {
+		log.Fatal(err)
+	}
 }

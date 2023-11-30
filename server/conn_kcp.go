@@ -1,16 +1,15 @@
 /**
   @author: Bruce
-  @since: 2023/9/24
-  @desc: //Connection on QUIC
+  @since: 2023/11/30
+  @desc: //kcp conn
 **/
 
 package server
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"github.com/quic-go/quic-go"
+	"github.com/xtaci/kcp-go"
 	"gts/iface"
 	"gts/utils"
 	"net"
@@ -18,11 +17,10 @@ import (
 	"time"
 )
 
-type ConnectionQuic struct {
+type ConnectionKCP struct {
 
 	//当前连接
-	Conn quic.Connection
-
+	Conn *kcp.UDPSession
 	//当前连接的ID 也可以称作为SessionID，ID全局唯一
 	ConnID uint64
 	//当前连接的关闭状态
@@ -58,8 +56,8 @@ type ConnectionQuic struct {
 }
 
 // newGServerConn 创建连接的方法
-func newQuicServerConn(server iface.IServer, conn quic.Connection, connID uint64) iface.IConnection {
-	c := &ConnectionQuic{
+func newKCPServerConn(server iface.IServer, conn *kcp.UDPSession, connID uint64) iface.IConnection {
+	c := &ConnectionKCP{
 		Conn:         conn,
 		ConnID:       connID,
 		isClosed:     false,
@@ -75,21 +73,33 @@ func newQuicServerConn(server iface.IServer, conn quic.Connection, connID uint64
 	return c
 }
 
+// newClientConn 创建连接的方法
+func newKCPClientConn(client iface.IClient, conn *kcp.UDPSession) iface.IConnection {
+	c := &ConnectionKCP{
+		Conn:         conn,
+		ConnID:       0,
+		isClosed:     false,
+		ExitBuffChan: make(chan bool, 1),
+		MsgHandler:   client.GetMsgHandler(),
+		msgChan:      make(chan []byte),
+		onConnStart:  client.GetOnConnStart(),
+		onConnStop:   client.GetOnConnStop(),
+	}
+
+	return c
+}
+
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
-func (c *ConnectionQuic) StartWriter() {
+func (c *ConnectionKCP) StartWriter() {
 	fmt.Println("Writer Goroutine is  running")
 	defer fmt.Println(c.RemoteAddr().String(), " conn Writer exit!")
 	defer c.Stop()
-	stream, err := c.Conn.OpenStream()
-	if err != nil {
-		fmt.Println("OpenStream err: ", err)
-		return
-	}
+
 	for {
 		select {
 		case data := <-c.msgChan:
 			fmt.Println("StartWriter msgChan: ", data)
-			_, err = stream.Write(data)
+			_, err := c.Conn.Write(data)
 			if err != nil {
 				fmt.Println("Send Data error:, ", err, " Conn Writer exit")
 				return
@@ -103,48 +113,40 @@ func (c *ConnectionQuic) StartWriter() {
 }
 
 // StartReader 读消息Goroutine，用于从客户端中读取数据
-func (c *ConnectionQuic) StartReader() {
+func (c *ConnectionKCP) StartReader() {
 	fmt.Println("Reader Goroutine is  running")
 	defer fmt.Println(c.RemoteAddr().String(), " conn reader exit!")
 	defer c.Stop()
 	// 创建拆包解包的对象
 	dp := NewDataPack()
 
-	conn, ok := c.GetConnection().(*quic.Connection)
+	conn, ok := c.GetConnection().(*kcp.UDPSession)
 	if !ok {
-		fmt.Println("get quic conn err", c.GetConnection())
+		fmt.Println("get kcp conn err", c.GetConnection())
 		c.ExitBuffChan <- true
 		return
 	}
 	//(*conn).SendMessage()
 
-	stream, err := (*conn).AcceptStream(context.Background())
-	if err != nil {
-		fmt.Println("get quic stream err : ", err)
-		c.ExitBuffChan <- true
-		return
-	}
 	for {
 
 		fmt.Println("ready to read ")
 		data1 := []byte("Hello, server!")
-		_, err = stream.Write(data1)
+		_, err := conn.Write(data1)
 		if err != nil {
 			return
 		}
 
 		headData := make([]byte, dp.GetHeadLen())
-		size, err := stream.Read(headData)
+		size, err := conn.Read(headData)
 		if size != int(dp.GetHeadLen()) {
 			fmt.Println("read msg head length err, length : ", size)
 			c.ExitBuffChan <- true
 			return
 		}
-
-		fmt.Println("headData", string(headData))
-
+		//fmt.Println("headData", headData, dp.GetHeadLen())
 		//拆包，得到msgid 和 datalen 放在msg中
-		msg, err := dp.Unpack(headData)
+		msg, err := dp.UnpackHead(headData)
 		if err != nil {
 			fmt.Println("unpack err ", err)
 			c.ExitBuffChan <- true
@@ -154,7 +156,7 @@ func (c *ConnectionQuic) StartReader() {
 		//根据 dataLen 读取 data，放在msg.Data中
 		data := make([]byte, msg.GetDataLen())
 		if msg.GetDataLen() > 0 {
-			size, err = stream.Read(data)
+			size, err = conn.Read(data)
 			if err != nil || size != int(msg.GetDataLen()) {
 				fmt.Println("read msg data length err, length : , err: ", size, err)
 				c.ExitBuffChan <- true
@@ -189,7 +191,7 @@ func (c *ConnectionQuic) StartReader() {
 }
 
 // Start 启动连接，让当前连接开始工作
-func (c *ConnectionQuic) Start() {
+func (c *ConnectionKCP) Start() {
 	fmt.Println("Conn Start(), ConnID = ", c.ConnID)
 
 	//启动心跳检测
@@ -214,7 +216,7 @@ func (c *ConnectionQuic) Start() {
 }
 
 // Stop 停止连接，结束当前连接状态M
-func (c *ConnectionQuic) Stop() {
+func (c *ConnectionKCP) Stop() {
 	fmt.Println("Conn Stop(), ConnID = ", c.ConnID)
 	//如果当前链接已经关闭
 	if c.isClosed == true {
@@ -230,8 +232,7 @@ func (c *ConnectionQuic) Stop() {
 		c.connManager.Remove(c)
 	}
 
-	// 关闭socket链接 TODO
-	err := c.Conn.CloseWithError(0, "")
+	err := c.Conn.Close()
 	if err != nil {
 		fmt.Println("Conn Stop() Error, err = ", err)
 		return
@@ -243,28 +244,28 @@ func (c *ConnectionQuic) Stop() {
 	//close(c.msgChan)
 }
 
-func (c *ConnectionQuic) GetConnection() interface{} {
-	return &c.Conn
+func (c *ConnectionKCP) GetConnection() interface{} {
+	return c.Conn
 }
 
 // GetConnID 获取当前连接ID
-func (c *ConnectionQuic) GetConnID() uint64 {
+func (c *ConnectionKCP) GetConnID() uint64 {
 	return c.ConnID
 }
 
 // RemoteAddr 获取远程客户端地址信息
-func (c *ConnectionQuic) RemoteAddr() net.Addr {
+func (c *ConnectionKCP) RemoteAddr() net.Addr {
 
 	return c.Conn.RemoteAddr()
 }
 
 // LocalAddr 获取链接本地地址信息
-func (c *ConnectionQuic) LocalAddr() net.Addr {
+func (c *ConnectionKCP) LocalAddr() net.Addr {
 	return c.Conn.LocalAddr()
 }
 
 // Send 直接将数据封包发送数据给远程的TCP客户端
-func (c *ConnectionQuic) Send(msgId uint32, data []byte) error {
+func (c *ConnectionKCP) Send(msgId uint32, data []byte) error {
 	c.msgLock.RLock()
 	defer c.msgLock.RUnlock()
 
@@ -285,7 +286,7 @@ func (c *ConnectionQuic) Send(msgId uint32, data []byte) error {
 }
 
 // callOnConnStart 调用连接OnConnStart Hook函数
-func (c *ConnectionQuic) callOnConnStart() {
+func (c *ConnectionKCP) callOnConnStart() {
 	if c.onConnStart != nil {
 		fmt.Println("CallOnConnStart....")
 		c.onConnStart(c)
@@ -293,7 +294,7 @@ func (c *ConnectionQuic) callOnConnStart() {
 }
 
 // callOnConnStart 调用连接OnConnStop Hook函数
-func (c *ConnectionQuic) callOnConnStop() {
+func (c *ConnectionKCP) callOnConnStop() {
 	if c.onConnStop != nil {
 		fmt.Println("CallOnConnStop....")
 		c.onConnStop(c)
@@ -301,7 +302,7 @@ func (c *ConnectionQuic) callOnConnStop() {
 }
 
 // SetProperty 设置链接属性
-func (c *ConnectionQuic) SetProperty(key string, value interface{}) {
+func (c *ConnectionKCP) SetProperty(key string, value interface{}) {
 	c.propertyLock.Lock()
 	defer c.propertyLock.Unlock()
 	if c.property == nil {
@@ -312,7 +313,7 @@ func (c *ConnectionQuic) SetProperty(key string, value interface{}) {
 }
 
 // GetProperty 获取链接属性
-func (c *ConnectionQuic) GetProperty(key string) (interface{}, error) {
+func (c *ConnectionKCP) GetProperty(key string) (interface{}, error) {
 	c.propertyLock.Lock()
 	defer c.propertyLock.Unlock()
 
@@ -324,18 +325,18 @@ func (c *ConnectionQuic) GetProperty(key string) (interface{}, error) {
 }
 
 // RemoveProperty 移除链接属性
-func (c *ConnectionQuic) RemoveProperty(key string) {
+func (c *ConnectionKCP) RemoveProperty(key string) {
 	c.propertyLock.Lock()
 	defer c.propertyLock.Unlock()
 
 	delete(c.property, key)
 }
 
-func (c *ConnectionQuic) SetHeartBeat(hb iface.IHeartbeat) {
+func (c *ConnectionKCP) SetHeartBeat(hb iface.IHeartbeat) {
 	c.hb = hb
 }
 
-func (c *ConnectionQuic) IsAlive() bool {
+func (c *ConnectionKCP) IsAlive() bool {
 	if c.isClosed {
 		return false
 	}
@@ -345,6 +346,6 @@ func (c *ConnectionQuic) IsAlive() bool {
 	return lastTimeInterval < utils.Conf.GetHeartbeatMaxTime()
 }
 
-func (c *ConnectionQuic) updateActivity() {
+func (c *ConnectionKCP) updateActivity() {
 	c.lastActivityTime = time.Now()
 }

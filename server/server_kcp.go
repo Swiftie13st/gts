@@ -1,35 +1,32 @@
 /**
   @author: Bruce
   @since: 2023/11/30
-  @desc: //TCP
+  @desc: //KCP
 **/
 
 package server
 
 import (
+	"crypto/sha1"
 	"fmt"
+	"github.com/xtaci/kcp-go"
+	"golang.org/x/crypto/pbkdf2"
 	"gts/utils"
-	"net"
 )
 
-func (s *Server) startTcpServer() {
-	fmt.Printf("[START] Tcp Server listener at IP: %s, Port %d, is starting\n", s.IP, s.Port)
-	//1 获取一个TCP的Addr
-	addr, err := net.ResolveTCPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
+func (s *Server) startKCPServer() {
+	fmt.Printf("[START] Quic Server listener at IP: %s, Port %d, is starting\n", s.IP, s.Port)
+	addr := fmt.Sprintf("%s:%d", s.IP, s.Port)
+
+	key := pbkdf2.Key([]byte("demo pass"), []byte("demo salt"), 1024, 32, sha1.New)
+	block, _ := kcp.NewAESBlockCrypt(key)
+	listener, err := kcp.ListenWithOptions(addr, block, 10, 3)
 	if err != nil {
-		fmt.Println("resolve tcp addr err: ", err)
+		fmt.Println("listen kcp", addr, "err", err)
 		return
 	}
-
-	//2 监听服务器地址
-	listener, err := net.ListenTCP(s.IPVersion, addr)
-	if err != nil {
-		fmt.Println("listen", s.IPVersion, "err", err)
-		return
-	}
-
 	//已经监听成功
-	fmt.Println("start Gts server  ", s.Name, " success, now listening...")
+	fmt.Println("start Gts KCP server  ", s.Name, " success, now listening...")
 	//3 启动server网络连接业务
 	go func() {
 		for {
@@ -39,7 +36,7 @@ func (s *Server) startTcpServer() {
 				continue
 			}
 			//阻塞等待客户端建立连接请求
-			conn, err := listener.AcceptTCP()
+			conn, err := listener.AcceptKCP()
 			if err != nil {
 				fmt.Println("Accept err ", err)
 				continue
@@ -51,7 +48,7 @@ func (s *Server) startTcpServer() {
 				fmt.Println("Id gen err ", err)
 				continue
 			}
-			dealConn := newServerConn(s, conn, cid)
+			dealConn := newKCPServerConn(s, conn, cid)
 
 			//HeartBeat 心跳检测
 			if s.hb != nil {
