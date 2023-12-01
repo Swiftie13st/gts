@@ -129,14 +129,6 @@ func (c *ConnectionKCP) StartReader() {
 	//(*conn).SendMessage()
 
 	for {
-
-		fmt.Println("ready to read ")
-		data1 := []byte("Hello, server!")
-		_, err := conn.Write(data1)
-		if err != nil {
-			return
-		}
-
 		headData := make([]byte, dp.GetHeadLen())
 		size, err := conn.Read(headData)
 		if size != int(dp.GetHeadLen()) {

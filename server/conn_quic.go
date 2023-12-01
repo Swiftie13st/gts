@@ -127,12 +127,6 @@ func (c *ConnectionQuic) StartReader() {
 	for {
 
 		fmt.Println("ready to read ")
-		data1 := []byte("Hello, server!")
-		_, err = stream.Write(data1)
-		if err != nil {
-			return
-		}
-
 		headData := make([]byte, dp.GetHeadLen())
 		size, err := stream.Read(headData)
 		if size != int(dp.GetHeadLen()) {
