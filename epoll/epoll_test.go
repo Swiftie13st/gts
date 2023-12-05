@@ -7,9 +7,11 @@
 package epoll
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestEpoll(t *testing.T) {
@@ -60,5 +62,25 @@ func TestEpoll(t *testing.T) {
 				return
 			}
 		}
+	}
+}
+
+func TestEpollClient(t *testing.T) {
+	addr := "127.0.0.1:8888"
+
+	c, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	if err != nil {
+		fmt.Println("failed to connect", err)
+		return
+	}
+
+	defer func() {
+		c.Close()
+	}()
+
+	for {
+		time.Sleep(time.Second)
+		//log.Printf("连接 %d 发送数据", i)
+		c.Write([]byte("hello world\r\n"))
 	}
 }
