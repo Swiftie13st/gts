@@ -1,7 +1,9 @@
+//go:build linux
+
 /**
   @author: Bruce
   @since: 2023/12/1
-  @desc: //TODO
+  @desc: //test epoll
 **/
 
 package epoll
@@ -14,7 +16,7 @@ import (
 	"time"
 )
 
-func TestEpoll(t *testing.T) {
+func Start() {
 	listener, err := net.Listen("tcp", ":8888")
 	if err != nil {
 		panic(err)
@@ -50,19 +52,23 @@ func TestEpoll(t *testing.T) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			t.Log("accept err", err)
+			log.Println("accept err", err)
 			return
 		}
 
 		if err := ep.Add(conn); err != nil {
-			t.Log("epoll add err", err)
+			log.Println("epoll add err", err)
 			err := conn.Close()
 			if err != nil {
-				t.Log("conn close err", err)
+				log.Println("conn close err", err)
 				return
 			}
 		}
 	}
+}
+
+func TestEpoll(t *testing.T) {
+	Start()
 }
 
 func TestEpollClient(t *testing.T) {
@@ -81,6 +87,14 @@ func TestEpollClient(t *testing.T) {
 	for {
 		time.Sleep(time.Second)
 		//log.Printf("连接 %d 发送数据", i)
+		//log.Printf("连接 %d 发送数据", i)
 		c.Write([]byte("hello world\r\n"))
+	}
+}
+
+// 多epoller方式
+func TestMulEpoll(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		go Start()
 	}
 }

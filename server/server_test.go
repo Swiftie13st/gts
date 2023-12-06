@@ -1,15 +1,21 @@
-/**
-  @author: Bruce
-  @since: 2023/5/30
-  @desc: //TODO
-**/
+/*
+*
 
+	@author: Bruce
+	@since: 2023/5/30
+	@desc: //TODO
+
+*
+*/
 package server
 
 import (
 	"fmt"
 	"gts/iface"
 	"gts/utils"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"testing"
 )
 
@@ -27,6 +33,12 @@ func (pr *PingRouter) Handle(request iface.IRequest) {
 }
 
 func TestNewServer(t *testing.T) {
+	go func() {
+		if err := http.ListenAndServe(":8081", nil); err != nil {
+			log.Fatalf("pprof failed: %v", err)
+		}
+	}()
+
 	utils.InitSettings("../conf/config.yaml")
 	s := NewServer()
 
