@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/quic-go/quic-go"
+	"gts/message"
 	"net/http"
 	"net/url"
 	"testing"
@@ -27,15 +28,15 @@ func TestClient_WS(t *testing.T) {
 		return
 	}
 
-	dp := NewDataPack()
-	msg, err := dp.Pack(NewMsgPackage(1, []byte("Hello world")))
+	dp := message.NewDataPack()
+	msg, err := dp.Pack(message.NewMsgPackage(1, []byte("Hello world")))
 	if err != nil {
-		fmt.Println("Pack error msg id = ", 1)
+		fmt.Println("Pack error Msg id = ", 1)
 		return
 	}
 	err = c.WriteMessage(websocket.BinaryMessage, msg)
 	if err != nil {
-		fmt.Println("write msg err: ", err)
+		fmt.Println("write Msg err: ", err)
 		return
 	}
 	go read(c)
@@ -49,7 +50,7 @@ func read(c *websocket.Conn) {
 			fmt.Println("read:", err)
 			return
 		}
-		p := NewDataPack()
+		p := message.NewDataPack()
 		img, err := p.Unpack(message)
 		if err != nil {
 			fmt.Println("read:", err)
@@ -85,8 +86,8 @@ func TestClient_Quic(t *testing.T) {
 	}(stream)
 	data := []byte("Hello, server!")
 
-	db := NewDataPack()
-	pack, err := db.Pack(NewMsgPackage(1, data))
+	db := message.NewDataPack()
+	pack, err := db.Pack(message.NewMsgPackage(1, data))
 	if err != nil {
 		fmt.Println("pack err", err)
 		return

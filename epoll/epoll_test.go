@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func Start() {
+func TestEpoll(t *testing.T) {
 	listener, err := net.Listen("tcp", ":8888")
 	if err != nil {
 		panic(err)
@@ -52,23 +52,19 @@ func Start() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println("accept err", err)
+			t.Log("accept err", err)
 			return
 		}
 
 		if err := ep.Add(conn); err != nil {
-			log.Println("epoll add err", err)
+			t.Log("epoll add err", err)
 			err := conn.Close()
 			if err != nil {
-				log.Println("conn close err", err)
+				t.Log("conn close err", err)
 				return
 			}
 		}
 	}
-}
-
-func TestEpoll(t *testing.T) {
-	Start()
 }
 
 func TestEpollClient(t *testing.T) {
@@ -87,14 +83,6 @@ func TestEpollClient(t *testing.T) {
 	for {
 		time.Sleep(time.Second)
 		//log.Printf("连接 %d 发送数据", i)
-		//log.Printf("连接 %d 发送数据", i)
 		c.Write([]byte("hello world\r\n"))
-	}
-}
-
-// 多epoller方式
-func TestMulEpoll(t *testing.T) {
-	for i := 0; i < 10; i++ {
-		go Start()
 	}
 }

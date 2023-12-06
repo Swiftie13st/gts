@@ -11,7 +11,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/panjf2000/gnet"
 	"github.com/panjf2000/gnet/pkg/pool/goroutine"
+	"gts/heartbead"
 	"gts/iface"
+	"gts/message"
 	"gts/utils"
 	"log"
 	"net/http"
@@ -61,7 +63,7 @@ func NewGServer() iface.IServer {
 		IP:         utils.Conf.Ip,
 		Port:       utils.Conf.Port,
 		WsPort:     utils.Conf.WsPort,
-		msgHandler: NewMsgHandle(),
+		msgHandler: message.NewMsgHandle(),
 		ConnMgr:    NewConnManager(),
 		sf:         utils.NewSnowflakeGenerator(utils.Conf.WorkerId, utils.Conf.DatacenterId),
 		multicore:  true,
@@ -79,8 +81,8 @@ func (s *GServer) OnInitComplete(srv gnet.Server) (action gnet.Action) {
 // React 每次收到信息后操作
 func (s *GServer) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Action) {
 
-	dp := NewDataPack()
-	msg, err := dp.Pack(NewMsgPackage(1, frame))
+	dp := message.NewDataPack()
+	msg, err := dp.Pack(message.NewMsgPackage(1, frame))
 	if err != nil {
 		fmt.Println("data pack err:", err)
 		return
@@ -90,7 +92,7 @@ func (s *GServer) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Acti
 
 	//_ = s.pool.Submit(func() {
 	//	time.Sleep(1 * time.Second)
-	//	err := c.AsyncWrite(msg)
+	//	err := c.AsyncWrite(Msg)
 	//	if err != nil {
 	//		fmt.Println("React AsyncWrite err: ", err)
 	//		return
@@ -268,7 +270,7 @@ func (s *GServer) GetHeartBeat() iface.IHeartbeat {
 
 // StartHeartBeat 启动心跳检测
 func (s *GServer) StartHeartBeat() {
-	hb := NewHeartbeat(utils.Conf.GetHeartbeatInterval())
+	hb := heartbead.NewHeartbeat(utils.Conf.GetHeartbeatInterval())
 	s.AddRouter(hb.GetMsgID(), hb.GetRouter())
 	s.hb = hb
 }

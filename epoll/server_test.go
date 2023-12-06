@@ -1,13 +1,10 @@
-/*
-*
+/**
+  @author: Bruce
+  @since: 2023/12/6
+  @desc: //TODO
+**/
 
-	@author: Bruce
-	@since: 2023/5/30
-	@desc: //TODO
-
-*
-*/
-package server
+package epoll
 
 import (
 	"fmt"
@@ -16,7 +13,6 @@ import (
 	"gts/utils"
 	"log"
 	"net/http"
-	_ "net/http/pprof"
 	"testing"
 )
 
@@ -42,14 +38,6 @@ func TestNewServer(t *testing.T) {
 
 	utils.InitSettings("../conf/config.yaml")
 	s := NewServer()
-
-	s.AddRouter(1, &PingRouter{})
-	s.Serve()
-}
-
-func TestNewGServer(t *testing.T) {
-	utils.InitSettings("../conf/config.yaml")
-	s := NewGServer()
 
 	s.AddRouter(1, &PingRouter{})
 	s.Serve()
