@@ -76,22 +76,6 @@ func newServerConn(server iface.IServer, conn *net.TCPConn, connID uint64) iface
 	return c
 }
 
-// newClientConn 创建连接的方法
-func newClientConn(client iface.IClient, conn *net.TCPConn) iface.IConnection {
-	c := &Connection{
-		Conn:         conn,
-		ConnID:       0,
-		isClosed:     false,
-		ExitBuffChan: make(chan bool, 1),
-		MsgHandler:   client.GetMsgHandler(),
-		msgChan:      make(chan []byte),
-		onConnStart:  client.GetOnConnStart(),
-		onConnStop:   client.GetOnConnStop(),
-	}
-
-	return c
-}
-
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
 func (c *Connection) StartWriter() {
 	fmt.Println("Writer Goroutine is  running")
@@ -122,59 +106,65 @@ func (c *Connection) StartReader() {
 	defer c.Stop()
 
 	for {
-		// 创建拆包解包的对象
-		dp := message.NewDataPack()
+		_ = c.Read()
+	}
+}
 
-		//读取客户端的Msg head
-		headData := make([]byte, dp.GetHeadLen())
-		if _, err := io.ReadFull(c.GetConnection().(*net.TCPConn), headData); err != nil {
-			fmt.Println("read msg head error ", err)
+// 读取一次数据
+func (c *Connection) Read() error {
+	// 创建拆包解包的对象
+	dp := message.NewDataPack()
+
+	//读取客户端的Msg head
+	headData := make([]byte, dp.GetHeadLen())
+	if _, err := io.ReadFull(c.GetConnection().(*net.TCPConn), headData); err != nil {
+		fmt.Println("read Msg head error ", err)
+		c.ExitBuffChan <- true
+		return err
+	}
+	fmt.Println("headData", headData)
+
+	//拆包，得到msgid 和 datalen 放在msg中
+	msg, err := dp.UnpackHead(headData)
+	if err != nil {
+		fmt.Println("unpack err ", err)
+		c.ExitBuffChan <- true
+		return err
+	}
+
+	//根据 dataLen 读取 data，放在msg.Data中
+	var data []byte
+	if msg.GetDataLen() > 0 {
+		data = make([]byte, msg.GetDataLen())
+		if _, err := io.ReadFull(c.GetConnection().(*net.TCPConn), data); err != nil {
+			fmt.Println("read Msg data error ", err)
 			c.ExitBuffChan <- true
-			continue
-		}
-		fmt.Println("headData", headData)
-
-		//拆包，得到msgid 和 datalen 放在msg中
-		msg, err := dp.UnpackHead(headData)
-		if err != nil {
-			fmt.Println("unpack err ", err)
-			c.ExitBuffChan <- true
-			continue
-		}
-
-		//根据 dataLen 读取 data，放在msg.Data中
-		var data []byte
-		if msg.GetDataLen() > 0 {
-			data = make([]byte, msg.GetDataLen())
-			if _, err := io.ReadFull(c.GetConnection().(*net.TCPConn), data); err != nil {
-				fmt.Println("read msg data error ", err)
-				c.ExitBuffChan <- true
-				continue
-			}
-		}
-		msg.SetData(data)
-		if msg.GetMsgId() == iface.HeartBeatDefaultMsgID {
-			//心跳检测数据，更新心跳检测Active状态
-			fmt.Println("心跳检测数据，更新心跳检测Active状态")
-			if c.hb != nil {
-				c.updateActivity()
-			}
-		} else {
-			//得到当前客户端请求的Request数据
-			fmt.Println("得到当前客户端请求的Request数据")
-			req := message.Request{
-				Conn: c,
-				Msg:  msg,
-			}
-			if utils.Conf.WorkerPoolSize > 0 {
-				//已经启动工作池机制，将消息交给Worker处理
-				c.MsgHandler.SendMsgToTaskQueue(&req)
-			} else {
-				//从绑定好的消息和对应的处理方法中执行对应的Handle方法
-				go c.MsgHandler.DoMsgHandler(&req)
-			}
+			return err
 		}
 	}
+	msg.SetData(data)
+	if msg.GetMsgId() == iface.HeartBeatDefaultMsgID {
+		//心跳检测数据，更新心跳检测Active状态
+		fmt.Println("心跳检测数据，更新心跳检测Active状态")
+		if c.hb != nil {
+			c.updateActivity()
+		}
+	} else {
+		//得到当前客户端请求的Request数据
+		fmt.Println("得到当前客户端请求的Request数据")
+		req := message.Request{
+			Conn: c,
+			Msg:  msg,
+		}
+		if utils.Conf.WorkerPoolSize > 0 {
+			//已经启动工作池机制，将消息交给Worker处理
+			c.MsgHandler.SendMsgToTaskQueue(&req)
+		} else {
+			//从绑定好的消息和对应的处理方法中执行对应的Handle方法
+			go c.MsgHandler.DoMsgHandler(&req)
+		}
+	}
+	return nil
 }
 
 // Start 启动连接，让当前连接开始工作 TODO
@@ -188,10 +178,11 @@ func (c *Connection) Start() {
 	}
 
 	//1 开启用于写回客户端数据流程的Goroutine
-	go c.StartReader()
+	// go c.StartReader()
 	//2 开启用户从客户端读取数据流程的Goroutine
 	go c.StartWriter()
 	c.callOnConnStart()
+
 	for {
 		select {
 		case <-c.ExitBuffChan:

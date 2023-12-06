@@ -11,68 +11,82 @@ package epoll
 import (
 	"errors"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"gts/iface"
 	"net"
 	"sync"
+	"syscall"
 )
 
 type ConnManager struct {
 	connections map[uint64]iface.IConnection //管理的连接信息
 	connLock    sync.RWMutex                 //读写连接的读写锁
-	ep          *epoll                       // epoller
+	fd          int                          // epoll 描述符
+	fd2conn     map[int]uint64               // fd 转 connID
+	// epConnections map[int]net.Conn // 存储连接的映射
 }
 
 func NewConnManager() *ConnManager {
-	ep, err := NewEpoll()
+	fd, err := unix.EpollCreate1(0) // 创建 epoll 描述符
 	if err != nil {
-		panic(err)
+		fmt.Println("EpollCreate1 err: ", err)
+		return nil
 	}
-	return &ConnManager{
+
+	cm := &ConnManager{
 		connections: make(map[uint64]iface.IConnection),
-		ep:          ep,
+		fd2conn:     make(map[int]uint64),
+		fd:          fd,
 	}
+
+	return cm
 }
 
 // Add 添加链接
 func (cm *ConnManager) Add(conn iface.IConnection) {
 	cm.connLock.Lock()
+	defer cm.connLock.Unlock()
 	// 将conn加入集合
 	cm.connections[conn.GetConnID()] = conn
-	tcpConn, ok := conn.(net.Conn)
+
+	tcpConn, ok := conn.GetConnection().(*net.TCPConn)
 	if !ok {
 		fmt.Println("epoll conn is not net.Conn")
-	}
-	err := cm.ep.Add(tcpConn)
-	if err != nil {
-		fmt.Println("epoll add err", err)
-		err := tcpConn.Close()
-		if err != nil {
-			fmt.Println("conn close err", err)
-			return
-		}
+		return
 	}
 
-	cm.connLock.Unlock()
+	fd := getFD(tcpConn)
+
+	cm.fd2conn[fd] = conn.GetConnID()
+	event := unix.EpollEvent{Events: unix.POLLIN | unix.POLLHUP, Fd: int32(fd)}
+	err := unix.EpollCtl(cm.fd, syscall.EPOLL_CTL_ADD, fd, &event)
+	if err != nil {
+		fmt.Println("EpollCtl Add err: ", err)
+		return
+	}
 	fmt.Println("connection add to ConnManager successfully: conn num = ", cm.Len())
 }
 
 // Remove 删除连接
 func (cm *ConnManager) Remove(conn iface.IConnection) {
 	cm.connLock.Lock()
+	defer cm.connLock.Unlock()
 
-	// 将conn移除
-	delete(cm.connections, conn.GetConnID())
-	tcpConn, ok := conn.(net.Conn)
+	tcpConn, ok := conn.GetConnection().(*net.TCPConn)
 	if !ok {
 		fmt.Println("epoll conn is not net.Conn")
-	}
-	err := cm.ep.Remove(tcpConn)
-	if err != nil {
-		fmt.Println("epoll remove conn err", err)
 		return
 	}
+	// 将conn移除
+	fd := getFD(tcpConn)
+	err := unix.EpollCtl(cm.fd, syscall.EPOLL_CTL_DEL, fd, nil)
+	if err != nil {
+		fmt.Println("EpollCtl Del err: ", err)
+		return
+	}
+	delete(cm.connections, conn.GetConnID())
+	delete(cm.fd2conn, fd)
 
-	cm.connLock.Unlock()
 	fmt.Println("connection Remove ConnID=", conn.GetConnID(), " successfully: conn num = ", cm.Len())
 }
 
@@ -100,19 +114,9 @@ func (cm *ConnManager) Len() int {
 func (cm *ConnManager) ClearConn() {
 	cm.connLock.Lock()
 	//停止并删除全部的连接信息
-	for connID, conn := range cm.connections {
+	for _, conn := range cm.connections {
 		//停止
-		conn.Stop()
-		delete(cm.connections, connID)
-		tcpConn, ok := conn.(net.Conn)
-		if !ok {
-			fmt.Println("epoll conn is not net.Conn")
-		}
-		err := cm.ep.Remove(tcpConn)
-		if err != nil {
-			fmt.Println("epoll remove conn err", err)
-			return
-		}
+		cm.Remove(conn)
 	}
 	cm.connLock.Unlock()
 	fmt.Println("Clear All Connections successfully: conn num = ", cm.Len())
@@ -129,4 +133,27 @@ func (cm *ConnManager) GetAllConnID() []uint64 {
 	}
 
 	return ids
+}
+
+// StartEpollWait 等待事件发生并返回相关的连接
+func (cm *ConnManager) StartEpollWait() ([]iface.IConnection, error) {
+	events := make([]unix.EpollEvent, 100)
+retry:
+	n, err := unix.EpollWait(cm.fd, events, 100)
+	if err != nil {
+		if err == unix.EINTR {
+			goto retry
+		}
+		fmt.Println("EpollWait err: ", err)
+		return nil, err
+	}
+	cm.connLock.RLock()
+	defer cm.connLock.RUnlock()
+	var connections []iface.IConnection
+	for i := 0; i < n; i++ {
+		fd := int(events[i].Fd)
+		conn := cm.connections[cm.fd2conn[fd]]
+		connections = append(connections, conn)
+	}
+	return connections, nil
 }

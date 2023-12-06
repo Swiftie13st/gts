@@ -33,7 +33,7 @@ type Server struct {
 	//当前Server的消息管理模块，用来绑定MsgId和对应的处理方法
 	msgHandler iface.IMsgHandle
 	//当前Server的链接管理器
-	ConnMgr iface.IConnManager
+	ConnMgr *ConnManager
 
 	//该Server的连接创建时Hook函数
 	onConnStart func(conn iface.IConnection)
@@ -60,7 +60,6 @@ func NewServer() iface.IServer {
 		ConnMgr:    NewConnManager(),
 		sf:         utils.NewSnowflakeGenerator(utils.Conf.WorkerId, utils.Conf.DatacenterId),
 	}
-
 	return s
 }
 
@@ -158,6 +157,19 @@ func (s *Server) startEpollServer() {
 	}
 
 	go func() {
+
+		go func() {
+			for {
+				connections, err := s.ConnMgr.StartEpollWait()
+				if err != nil {
+					continue
+				}
+				for _, conn := range connections {
+					conn.(*Connection).Read()
+				}
+			}
+		}()
+
 		for {
 			//服务器最大连接控制,如果超过最大连接，那么则关闭此新的连接
 			if s.ConnMgr.Len() >= utils.Conf.MaxConn {
@@ -178,16 +190,16 @@ func (s *Server) startEpollServer() {
 				continue
 			}
 			dealConn := newServerConn(s, conn, cid)
-			//HeartBeat 心跳检测
+			// HeartBeat 心跳检测
 			if s.hb != nil {
 				//从Server端克隆一个心跳检测器
 				heartBeat := s.hb.Clone()
 				//绑定当前链接
 				heartBeat.BindConn(dealConn)
 			}
-
 			//3.4 启动当前链接的处理业务
 			go dealConn.Start()
+
 		}
 	}()
 
