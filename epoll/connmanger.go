@@ -44,26 +44,23 @@ func NewConnManager() *ConnManager {
 
 // Add 添加链接
 func (cm *ConnManager) Add(conn iface.IConnection) {
-	cm.connLock.Lock()
-	defer cm.connLock.Unlock()
-	// 将conn加入集合
-	cm.connections[conn.GetConnID()] = conn
-
 	tcpConn, ok := conn.GetConnection().(*net.TCPConn)
 	if !ok {
 		fmt.Println("epoll conn is not net.Conn")
 		return
 	}
-
 	fd := getFD(tcpConn)
-
-	cm.fd2conn[fd] = conn.GetConnID()
 	event := unix.EpollEvent{Events: unix.POLLIN | unix.POLLHUP, Fd: int32(fd)}
 	err := unix.EpollCtl(cm.fd, syscall.EPOLL_CTL_ADD, fd, &event)
 	if err != nil {
 		fmt.Println("EpollCtl Add err: ", err)
 		return
 	}
+	cm.connLock.Lock() // 不能defer解锁，Len方法会加锁
+	// 将conn加入集合
+	cm.connections[conn.GetConnID()] = conn
+	cm.fd2conn[fd] = conn.GetConnID()
+	cm.connLock.Unlock()
 	fmt.Println("connection add to ConnManager successfully: conn num = ", cm.Len())
 }
 

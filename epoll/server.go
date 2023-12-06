@@ -72,9 +72,7 @@ func (s *Server) Start() {
 	//0 启动worker工作池机制
 	s.msgHandler.StartWorkerPool()
 	// TODO
-	if utils.Conf.KCPMode {
-		go s.startEpollServer()
-	}
+	go s.startEpollServer()
 }
 
 func (s *Server) Stop() {
