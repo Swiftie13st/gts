@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/panjf2000/gnet"
 	"gts/iface"
+	"gts/message"
 	"gts/utils"
 	"net"
 	"sync"
@@ -78,7 +79,7 @@ func newGServerConn(server iface.IServer, conn gnet.Conn, connID uint64) iface.I
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
 func (c *GConnection) StartWriter() {
 	fmt.Println("Writer Goroutine is  running")
-	defer fmt.Println(c.RemoteAddr().String(), " conn Writer exit!")
+	defer fmt.Println(c.RemoteAddr().String(), " Conn Writer exit!")
 	defer c.Stop()
 
 	for {
@@ -106,21 +107,21 @@ func (c *GConnection) StartWriter() {
 // StartReader 读消息Goroutine，用于从客户端中读取数据
 func (c *GConnection) StartReader() {
 	fmt.Println("Reader Goroutine is  running")
-	defer fmt.Println(c.RemoteAddr().String(), " conn reader exit!")
+	defer fmt.Println(c.RemoteAddr().String(), " Conn reader exit!")
 	defer c.Stop()
 
 	// TODO
 	return
 	for {
 		// 创建拆包解包的对象
-		dp := NewDataPack()
+		dp := message.NewDataPack()
 
 		//读取客户端的Msg head
 
 		conn := *c.GetGConnection()
 		size, headData := conn.ReadN(int(dp.GetHeadLen()))
 		if size != int(dp.GetHeadLen()) {
-			fmt.Println("read msg head length err, length : ", size)
+			fmt.Println("read Msg head length err, length : ", size)
 			c.ExitBuffChan <- true
 			return
 		}
@@ -140,7 +141,7 @@ func (c *GConnection) StartReader() {
 		if msg.GetDataLen() > 0 {
 			size, data = conn.ReadN(int(msg.GetDataLen()))
 			if size != int(msg.GetDataLen()) {
-				fmt.Println("read msg data length err, length : ", size)
+				fmt.Println("read Msg data length err, length : ", size)
 				c.ExitBuffChan <- true
 				return
 			}
@@ -155,9 +156,9 @@ func (c *GConnection) StartReader() {
 		} else {
 			//得到当前客户端请求的Request数据
 			fmt.Println("得到当前客户端请求的Request数据")
-			req := Request{
-				conn: c,
-				msg:  msg,
+			req := message.Request{
+				Conn: c,
+				Msg:  msg,
 			}
 			if utils.Conf.WorkerPoolSize > 0 {
 				//已经启动工作池机制，将消息交给Worker处理
@@ -266,14 +267,14 @@ func (c *GConnection) Send(msgId uint32, data []byte) error {
 
 	fmt.Println("Send ", string(data))
 	if c.isClosed == true {
-		return errors.New("connection closed when send msg")
+		return errors.New("connection closed when send Msg")
 	}
 	//将data封包，并且发送
-	dp := NewDataPack()
-	msg, err := dp.Pack(NewMsgPackage(msgId, data))
+	dp := message.NewDataPack()
+	msg, err := dp.Pack(message.NewMsgPackage(msgId, data))
 	if err != nil {
-		fmt.Println("Pack error msg id = ", msgId)
-		return errors.New("Pack error msg ")
+		fmt.Println("Pack error Msg id = ", msgId)
+		return errors.New("Pack error Msg ")
 	}
 
 	//写回客户端

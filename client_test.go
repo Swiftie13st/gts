@@ -6,7 +6,8 @@ import (
 	"github.com/xtaci/kcp-go"
 	"golang.org/x/crypto/pbkdf2"
 	"gts/iface"
-	"gts/server"
+	"gts/message"
+	"gts/router"
 	"io"
 	"log"
 	"net"
@@ -16,7 +17,7 @@ import (
 
 // ClientRouter  自定义路由
 type ClientRouter struct {
-	server.BaseRouter //一定要先基础BaseRouter
+	router.BaseRouter //一定要先基础BaseRouter
 }
 
 func (cr *ClientRouter) Handle(request iface.IRequest) {
@@ -56,14 +57,14 @@ func ClientTest() {
 
 	for i := 0; i < 2; i++ {
 		//创建一个封包对象 dp
-		dp := server.NewDataPack()
+		dp := message.NewDataPack()
 
-		msg, err := dp.Pack(server.NewMsgPackage(1, []byte("Hello world")))
+		msg, err := dp.Pack(message.NewMsgPackage(1, []byte("Hello world")))
 		if err != nil {
 			fmt.Println("Pack error msg id = ", 1)
 			return
 		}
-		msg2, err := dp.Pack(server.NewMsgPackage(99999, []byte("Hello world2222")))
+		msg2, err := dp.Pack(message.NewMsgPackage(99999, []byte("Hello world2222")))
 		if err != nil {
 			fmt.Println("Pack error msg id = ", 2)
 			return
@@ -80,7 +81,7 @@ func ClientTest() {
 }
 
 func recvMsg(conn net.Conn) {
-	dp := server.NewDataPack()
+	dp := message.NewDataPack()
 	for {
 
 		//先读出流中的head部分
@@ -99,7 +100,7 @@ func recvMsg(conn net.Conn) {
 		}
 		if msgHead.GetDataLen() > 0 {
 			//msg 是有data数据的，需要再次读取data数据
-			msg := msgHead.(*server.Message)
+			msg := msgHead.(*message.Message)
 			msg.Data = make([]byte, msg.GetDataLen())
 
 			//根据dataLen从io中读取字节流
@@ -158,9 +159,9 @@ func TestKCPClient(t *testing.T) {
 			buf := make([]byte, len(data))
 
 			//创建一个封包对象 dp
-			dp := server.NewDataPack()
+			dp := message.NewDataPack()
 
-			msg, err := dp.Pack(server.NewMsgPackage(1, []byte(data)))
+			msg, err := dp.Pack(message.NewMsgPackage(1, []byte(data)))
 			if err != nil {
 				fmt.Println("Pack error msg id = ", 1)
 				return

@@ -1,18 +1,20 @@
+//go:build linux
+
 /**
   @author: Bruce
-  @since: 2023/3/17
-  @desc: //服务器核心
+  @since: 2023/12/6
+  @desc: //TODO
 **/
 
-package server
+package epoll
 
 import (
-	"context"
 	"fmt"
 	"gts/heartbead"
 	"gts/iface"
 	"gts/message"
 	"gts/utils"
+	"net"
 	"os"
 	"os/signal"
 )
@@ -31,7 +33,7 @@ type Server struct {
 	//当前Server的消息管理模块，用来绑定MsgId和对应的处理方法
 	msgHandler iface.IMsgHandle
 	//当前Server的链接管理器
-	ConnMgr iface.IConnManager
+	ConnMgr *ConnManager
 
 	//该Server的连接创建时Hook函数
 	onConnStart func(conn iface.IConnection)
@@ -58,7 +60,6 @@ func NewServer() iface.IServer {
 		ConnMgr:    NewConnManager(),
 		sf:         utils.NewSnowflakeGenerator(utils.Conf.WorkerId, utils.Conf.DatacenterId),
 	}
-
 	return s
 }
 
@@ -70,18 +71,8 @@ func (s *Server) Start() {
 
 	//0 启动worker工作池机制
 	s.msgHandler.StartWorkerPool()
-	if utils.Conf.TCPMode {
-		go s.startTcpServer()
-	}
-	if utils.Conf.WSMode {
-		go s.startWebSocketServer()
-	}
-	if utils.Conf.QuicMode {
-		go s.startQuicServer(context.Background())
-	}
-	if utils.Conf.KCPMode {
-		go s.startKCPServer()
-	}
+	// TODO
+	go s.startEpollServer()
 }
 
 func (s *Server) Stop() {
@@ -144,4 +135,77 @@ func (s *Server) StartHeartBeat() {
 	hb := heartbead.NewHeartbeat(utils.Conf.GetHeartbeatInterval())
 	s.AddRouter(hb.GetMsgID(), hb.GetRouter())
 	s.hb = hb
+}
+
+// TODO
+func (s *Server) startEpollServer() {
+	fmt.Printf("[START] Epoll Tcp Server listener at IP: %s, Port %d, is starting\n", s.IP, s.Port)
+	//1 获取一个TCP的Addr
+	addr, err := net.ResolveTCPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
+	if err != nil {
+		fmt.Println("resolve tcp addr err: ", err)
+		return
+	}
+
+	//2 监听服务器地址
+	listener, err := net.ListenTCP(s.IPVersion, addr)
+	if err != nil {
+		fmt.Println("listen", s.IPVersion, "err", err)
+		return
+	}
+
+	go func() {
+
+		go func() {
+			for {
+				connections, err := s.ConnMgr.StartEpollWait()
+				if err != nil {
+					continue
+				}
+				for _, conn := range connections {
+					conn.(*Connection).Read()
+				}
+			}
+		}()
+
+		for {
+			//服务器最大连接控制,如果超过最大连接，那么则关闭此新的连接
+			if s.ConnMgr.Len() >= utils.Conf.MaxConn {
+				fmt.Println("Exceeded the maxConn")
+				continue
+			}
+			//阻塞等待客户端建立连接请求
+			conn, err := listener.AcceptTCP()
+			if err != nil {
+				fmt.Println("accept err", err)
+				return
+			}
+
+			//3.3 处理该新连接请求的 业务 方法， 此时应该有 handler 和 conn是绑定的
+			cid, err := s.sf.NextVal()
+			if err != nil {
+				fmt.Println("Id gen err ", err)
+				continue
+			}
+			dealConn := newServerConn(s, conn, cid)
+			// HeartBeat 心跳检测
+			if s.hb != nil {
+				//从Server端克隆一个心跳检测器
+				heartBeat := s.hb.Clone()
+				//绑定当前链接
+				heartBeat.BindConn(dealConn)
+			}
+			//3.4 启动当前链接的处理业务
+			go dealConn.Start()
+
+		}
+	}()
+
+	select {
+	case <-s.exitChan:
+		err := listener.Close()
+		if err != nil {
+			fmt.Println("listener close err: ", err)
+		}
+	}
 }

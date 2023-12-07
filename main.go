@@ -9,13 +9,14 @@ package main
 import (
 	"fmt"
 	"gts/iface"
+	"gts/router"
 	"gts/server"
 	"gts/utils"
 )
 
 // PingRouter ping test 自定义路由
 type PingRouter struct {
-	server.BaseRouter //一定要先基础BaseRouter
+	router.BaseRouter //一定要先基础BaseRouter
 }
 
 func (pr *PingRouter) Handle(request iface.IRequest) {
@@ -28,7 +29,7 @@ func (pr *PingRouter) Handle(request iface.IRequest) {
 
 // Ping2Router ping test 自定义路由
 type Ping2Router struct {
-	server.BaseRouter //一定要先基础BaseRouter
+	router.BaseRouter //一定要先基础BaseRouter
 }
 
 func (pr *Ping2Router) Handle(request iface.IRequest) {

@@ -4,12 +4,13 @@
   @desc: //TODO
 **/
 
-package server
+package heartbead
 
 import (
 	"errors"
 	"fmt"
 	"gts/iface"
+	"gts/router"
 	"time"
 )
 
@@ -55,7 +56,7 @@ func NewHeartbeat(interval time.Duration) iface.IHeartbeat {
 		makeMsg:          makeDefaultMsg,
 		onRemoteNotAlive: notAliveDefaultFunc,
 		msgID:            iface.HeartBeatDefaultMsgID,
-		router:           &HeatBeatDefaultRouter{},
+		router:           &router.HeatBeatDefaultRouter{},
 	}
 
 	return heartbeat

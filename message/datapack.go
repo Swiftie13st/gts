@@ -4,7 +4,7 @@
   @desc: //针对Message进行TLV格式封装 解决粘包拆包
 **/
 
-package server
+package message
 
 import (
 	"bytes"

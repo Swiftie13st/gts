@@ -8,13 +8,15 @@ package server
 
 import (
 	"fmt"
+	"gts/heartbead"
 	"gts/iface"
+	"gts/message"
 	"gts/utils"
 	"net"
 	"time"
 )
 
-//Client 接口实现，定义一个Client服务类
+// Client 接口实现，定义一个Client服务类
 type Client struct {
 	//tcp4 or other
 	IPVersion string
@@ -42,7 +44,7 @@ func NewClient(ip string, port int) iface.IClient {
 		IPVersion:  utils.Conf.IpVersion,
 		IP:         ip,
 		Port:       port,
-		msgHandler: NewMsgHandle(),
+		msgHandler: message.NewMsgHandle(),
 	}
 
 	return c
@@ -129,7 +131,7 @@ func (c *Client) GetHeartBeat() iface.IHeartbeat {
 
 // StartHeartBeat 启动心跳检测
 func (c *Client) StartHeartBeat() {
-	hb := NewHeartbeat(15 * time.Second)
+	hb := heartbead.NewHeartbeat(15 * time.Second)
 	c.AddRouter(hb.GetMsgID(), hb.GetRouter())
 	c.hb = hb
 }

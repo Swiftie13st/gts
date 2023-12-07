@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"gts/iface"
+	"gts/message"
 	"gts/utils"
 	"net"
 	"sync"
@@ -91,7 +92,7 @@ func newClientWsConn(client iface.IClient, conn *websocket.Conn) iface.IConnecti
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
 func (c *WsConnection) StartWriter() {
 
-	defer fmt.Println(c.RemoteAddr().String(), " conn Writer exit!")
+	defer fmt.Println(c.RemoteAddr().String(), " Conn Writer exit!")
 	defer c.Stop()
 
 	for {
@@ -114,18 +115,18 @@ func (c *WsConnection) StartWriter() {
 // StartReader 读消息Goroutine，用于从客户端中读取数据
 func (c *WsConnection) StartReader() {
 	fmt.Println("Reader Goroutine is  running")
-	defer fmt.Println(c.RemoteAddr().String(), " conn reader exit!")
+	defer fmt.Println(c.RemoteAddr().String(), " Conn reader exit!")
 	defer c.Stop()
 
 	for {
 		// 创建拆包解包的对象
-		dp := NewDataPack()
+		dp := message.NewDataPack()
 
 		//读取客户端的Msg head
 		//headData := make([]byte, dp.GetHeadLen())
 		headData, err := c.read()
 		if err != nil {
-			fmt.Println("read msg head error ", err)
+			fmt.Println("read Msg head error ", err)
 			c.ExitBuffChan <- true
 			continue
 		}
@@ -148,9 +149,9 @@ func (c *WsConnection) StartReader() {
 		} else {
 			//得到当前客户端请求的Request数据
 			fmt.Println("得到当前客户端请求的Request数据")
-			req := Request{
-				conn: c,
-				msg:  msg,
+			req := message.Request{
+				Conn: c,
+				Msg:  msg,
 			}
 			if utils.Conf.WorkerPoolSize > 0 {
 				//已经启动工作池机制，将消息交给Worker处理
@@ -167,7 +168,7 @@ func (c *WsConnection) read() ([]byte, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	if c.isClosed {
-		return nil, errors.New("conn close,reader")
+		return nil, errors.New("Conn close,reader")
 	}
 	_, message, err := c.Conn.ReadMessage()
 	if err != nil {
@@ -267,14 +268,14 @@ func (c *WsConnection) Send(msgId uint32, data []byte) error {
 	c.msgLock.RLock()
 	defer c.msgLock.RUnlock()
 	if c.isClosed == true {
-		return errors.New("connection closed when send msg")
+		return errors.New("connection closed when send Msg")
 	}
 	//将data封包，并且发送
-	dp := NewDataPack()
-	msg, err := dp.Pack(NewMsgPackage(msgId, data))
+	dp := message.NewDataPack()
+	msg, err := dp.Pack(message.NewMsgPackage(msgId, data))
 	if err != nil {
-		fmt.Println("Pack error msg id = ", msgId)
-		return errors.New("Pack error msg ")
+		fmt.Println("Pack error Msg id = ", msgId)
+		return errors.New("Pack error Msg ")
 	}
 
 	//写回客户端

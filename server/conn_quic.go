@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"gts/iface"
+	"gts/message"
 	"gts/utils"
 	"net"
 	"sync"
@@ -78,7 +79,7 @@ func newQuicServerConn(server iface.IServer, conn quic.Connection, connID uint64
 // StartWriter 写消息Goroutine， 用户将数据发送给客户端
 func (c *ConnectionQuic) StartWriter() {
 	fmt.Println("Writer Goroutine is  running")
-	defer fmt.Println(c.RemoteAddr().String(), " conn Writer exit!")
+	defer fmt.Println(c.RemoteAddr().String(), " Conn Writer exit!")
 	defer c.Stop()
 	stream, err := c.Conn.OpenStream()
 	if err != nil {
@@ -105,18 +106,18 @@ func (c *ConnectionQuic) StartWriter() {
 // StartReader 读消息Goroutine，用于从客户端中读取数据
 func (c *ConnectionQuic) StartReader() {
 	fmt.Println("Reader Goroutine is  running")
-	defer fmt.Println(c.RemoteAddr().String(), " conn reader exit!")
+	defer fmt.Println(c.RemoteAddr().String(), " Conn reader exit!")
 	defer c.Stop()
 	// 创建拆包解包的对象
-	dp := NewDataPack()
+	dp := message.NewDataPack()
 
 	conn, ok := c.GetConnection().(*quic.Connection)
 	if !ok {
-		fmt.Println("get quic conn err", c.GetConnection())
+		fmt.Println("get quic Conn err", c.GetConnection())
 		c.ExitBuffChan <- true
 		return
 	}
-	//(*conn).SendMessage()
+	//(*Conn).SendMessage()
 
 	stream, err := (*conn).AcceptStream(context.Background())
 	if err != nil {
@@ -127,16 +128,10 @@ func (c *ConnectionQuic) StartReader() {
 	for {
 
 		fmt.Println("ready to read ")
-		data1 := []byte("Hello, server!")
-		_, err = stream.Write(data1)
-		if err != nil {
-			return
-		}
-
 		headData := make([]byte, dp.GetHeadLen())
 		size, err := stream.Read(headData)
 		if size != int(dp.GetHeadLen()) {
-			fmt.Println("read msg head length err, length : ", size)
+			fmt.Println("read Msg head length err, length : ", size)
 			c.ExitBuffChan <- true
 			return
 		}
@@ -156,7 +151,7 @@ func (c *ConnectionQuic) StartReader() {
 		if msg.GetDataLen() > 0 {
 			size, err = stream.Read(data)
 			if err != nil || size != int(msg.GetDataLen()) {
-				fmt.Println("read msg data length err, length : , err: ", size, err)
+				fmt.Println("read Msg data length err, length : , err: ", size, err)
 				c.ExitBuffChan <- true
 				return
 			}
@@ -172,9 +167,9 @@ func (c *ConnectionQuic) StartReader() {
 		} else {
 			//得到当前客户端请求的Request数据
 			fmt.Println("得到当前客户端请求的Request数据")
-			req := Request{
-				conn: c,
-				msg:  msg,
+			req := message.Request{
+				Conn: c,
+				Msg:  msg,
 			}
 			if utils.Conf.WorkerPoolSize > 0 {
 				//已经启动工作池机制，将消息交给Worker处理
@@ -270,14 +265,14 @@ func (c *ConnectionQuic) Send(msgId uint32, data []byte) error {
 
 	fmt.Println("Send ", string(data))
 	if c.isClosed == true {
-		return errors.New("connection closed when send msg")
+		return errors.New("connection closed when send Msg")
 	}
 	//将data封包，并且发送
-	dp := NewDataPack()
-	msg, err := dp.Pack(NewMsgPackage(msgId, data))
+	dp := message.NewDataPack()
+	msg, err := dp.Pack(message.NewMsgPackage(msgId, data))
 	if err != nil {
-		fmt.Println("Pack error msg id = ", msgId)
-		return errors.New("Pack error msg ")
+		fmt.Println("Pack error Msg id = ", msgId)
+		return errors.New("Pack error Msg ")
 	}
 	//写回客户端
 	c.msgChan <- msg

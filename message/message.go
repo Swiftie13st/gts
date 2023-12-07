@@ -4,7 +4,7 @@
   @desc: //TODO
 **/
 
-package server
+package message
 
 type Message struct {
 	Id      uint32 //消息的ID

@@ -4,7 +4,7 @@
   @desc: //消息管理模块
 **/
 
-package server
+package message
 
 import (
 	"fmt"

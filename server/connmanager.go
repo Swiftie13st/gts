@@ -30,7 +30,7 @@ func (cm *ConnManager) Add(conn iface.IConnection) {
 	// 将conn加入集合
 	cm.connections[conn.GetConnID()] = conn
 	cm.connLock.Unlock()
-	fmt.Println("connection add to ConnManager successfully: conn num = ", cm.Len())
+	fmt.Println("connection add to ConnManager successfully: Conn num = ", cm.Len())
 }
 
 // Remove 删除连接
@@ -40,7 +40,7 @@ func (cm *ConnManager) Remove(conn iface.IConnection) {
 	// 将conn移除
 	delete(cm.connections, conn.GetConnID())
 	cm.connLock.Unlock()
-	fmt.Println("connection Remove ConnID=", conn.GetConnID(), " successfully: conn num = ", cm.Len())
+	fmt.Println("connection Remove ConnID=", conn.GetConnID(), " successfully: Conn num = ", cm.Len())
 }
 
 // Get 利用ConnID获取链接
@@ -71,7 +71,7 @@ func (cm *ConnManager) ClearConn() {
 		delete(cm.connections, connID)
 	}
 	cm.connLock.Unlock()
-	fmt.Println("Clear All Connections successfully: conn num = ", cm.Len())
+	fmt.Println("Clear All Connections successfully: Conn num = ", cm.Len())
 }
 
 // GetAllConnID 获取所有连接ID
