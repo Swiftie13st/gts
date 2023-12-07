@@ -8,7 +8,7 @@ GTS(Go Tcp Server)使用golang编写的一个轻量级、高性能TCP服务器�
 4. 通过心跳检测机制监测双方连接状态。
 5. 通过雪花算法分配连接id。
 6. 支持TCP、WebSocket、Quic、KCP协议
-7. 
+7. 使用epoll机制优化goroutine-per-connection方式，减少内存资源占用与调度
 
 ## 架构设计
 

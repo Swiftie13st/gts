@@ -33,7 +33,7 @@ type Connection struct {
 	MsgHandler iface.IMsgHandle
 
 	//告知该链接已经退出/停止的channel
-	ExitBuffChan chan bool
+	ExitBuffChan chan struct{}
 
 	//用于读、写两个goroutine之间的消息通信
 	msgChan chan []byte
@@ -64,7 +64,7 @@ func newServerConn(server iface.IServer, conn *net.TCPConn, connID uint64) iface
 		Conn:         conn,
 		ConnID:       connID,
 		isClosed:     false,
-		ExitBuffChan: make(chan bool, 1),
+		ExitBuffChan: make(chan struct{}, 1),
 		MsgHandler:   server.GetMsgHandler(),
 		msgChan:      make(chan []byte, 1024),
 		connManager:  server.GetConnMgr(),
@@ -119,7 +119,7 @@ func (c *Connection) Read() error {
 	headData := make([]byte, dp.GetHeadLen())
 	if _, err := io.ReadFull(c.GetConnection().(*net.TCPConn), headData); err != nil {
 		fmt.Println("read Msg head error ", err)
-		c.ExitBuffChan <- true
+		close(c.ExitBuffChan)
 		return err
 	}
 	fmt.Println("headData", headData)
@@ -128,7 +128,7 @@ func (c *Connection) Read() error {
 	msg, err := dp.UnpackHead(headData)
 	if err != nil {
 		fmt.Println("unpack err ", err)
-		c.ExitBuffChan <- true
+		close(c.ExitBuffChan)
 		return err
 	}
 
@@ -138,7 +138,7 @@ func (c *Connection) Read() error {
 		data = make([]byte, msg.GetDataLen())
 		if _, err := io.ReadFull(c.GetConnection().(*net.TCPConn), data); err != nil {
 			fmt.Println("read Msg data error ", err)
-			c.ExitBuffChan <- true
+			close(c.ExitBuffChan)
 			return err
 		}
 	}
@@ -218,8 +218,8 @@ func (c *Connection) Stop() {
 	}
 
 	//通知从缓冲队列读数据的业务，该链接已经关闭
-	c.ExitBuffChan <- true
-	//close(c.ExitBuffChan)
+	//c.ExitBuffChan <- true
+	close(c.ExitBuffChan)
 	//close(c.msgChan)
 }
 
