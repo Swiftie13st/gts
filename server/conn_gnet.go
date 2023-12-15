@@ -7,6 +7,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
@@ -33,7 +34,8 @@ type GConnection struct {
 	MsgHandler iface.IMsgHandle
 
 	//告知该链接已经退出/停止的channel
-	ExitBuffChan chan bool
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	//用于读、写两个goroutine之间的消息通信
 	msgChan chan []byte
@@ -61,15 +63,15 @@ type GConnection struct {
 // newGServerConn 创建连接的方法
 func newGServerConn(server iface.IServer, conn gnet.Conn, connID uint64) iface.IConnection {
 	c := &GConnection{
-		Conn:         conn,
-		ConnID:       connID,
-		isClosed:     false,
-		ExitBuffChan: make(chan bool, 1),
-		MsgHandler:   server.GetMsgHandler(),
-		msgChan:      make(chan []byte, 1024),
-		connManager:  server.GetConnMgr(),
-		onConnStart:  server.GetOnConnStart(),
-		onConnStop:   server.GetOnConnStop(),
+		Conn:     conn,
+		ConnID:   connID,
+		isClosed: false,
+		//ExitBuffChan: make(chan bool, 1),
+		MsgHandler:  server.GetMsgHandler(),
+		msgChan:     make(chan []byte, 1024),
+		connManager: server.GetConnMgr(),
+		onConnStart: server.GetOnConnStart(),
+		onConnStop:  server.GetOnConnStop(),
 	}
 
 	server.GetConnMgr().Add(c)
@@ -96,7 +98,7 @@ func (c *GConnection) StartWriter() {
 			//	fmt.Println("Send Data error:, ", err, " Conn Writer exit")
 			//	return
 			//}
-		case <-c.ExitBuffChan:
+		case <-c.ctx.Done():
 			fmt.Println("StartWriter ExitBuffChan")
 			//conn已经关闭
 			return
@@ -122,7 +124,7 @@ func (c *GConnection) StartReader() {
 		size, headData := conn.ReadN(int(dp.GetHeadLen()))
 		if size != int(dp.GetHeadLen()) {
 			fmt.Println("read Msg head length err, length : ", size)
-			c.ExitBuffChan <- true
+			//c.ExitBuffChan <- true
 			return
 		}
 
@@ -132,7 +134,7 @@ func (c *GConnection) StartReader() {
 		msg, err := dp.UnpackHead(headData)
 		if err != nil {
 			fmt.Println("unpack err ", err)
-			c.ExitBuffChan <- true
+			//c.ExitBuffChan <- true
 			continue
 		}
 
@@ -142,7 +144,7 @@ func (c *GConnection) StartReader() {
 			size, data = conn.ReadN(int(msg.GetDataLen()))
 			if size != int(msg.GetDataLen()) {
 				fmt.Println("read Msg data length err, length : ", size)
-				c.ExitBuffChan <- true
+				//c.ExitBuffChan <- true
 				return
 			}
 		}
@@ -181,7 +183,7 @@ func (c *GConnection) Start() {
 		c.hb.Start()
 		c.updateActivity()
 	}
-
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 	//1 开启用于写回客户端数据流程的Goroutine
 	go c.StartReader()
 	//2 开启用户从客户端读取数据流程的Goroutine
@@ -189,7 +191,7 @@ func (c *GConnection) Start() {
 	c.callOnConnStart()
 	for {
 		select {
-		case <-c.ExitBuffChan:
+		case <-c.ctx.Done():
 
 			//得到退出消息，不再阻塞
 			return
@@ -222,7 +224,7 @@ func (c *GConnection) Stop() {
 	}
 
 	//通知从缓冲队列读数据的业务，该链接已经关闭
-	c.ExitBuffChan <- true
+	c.cancel()
 	//close(c.ExitBuffChan)
 	//close(c.msgChan)
 }

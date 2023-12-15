@@ -33,7 +33,8 @@ type ConnectionQuic struct {
 	MsgHandler iface.IMsgHandle
 
 	//告知该链接已经退出/停止的channel
-	ExitBuffChan chan bool
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	//用于读、写两个goroutine之间的消息通信
 	msgChan chan []byte
@@ -61,15 +62,15 @@ type ConnectionQuic struct {
 // newGServerConn 创建连接的方法
 func newQuicServerConn(server iface.IServer, conn quic.Connection, connID uint64) iface.IConnection {
 	c := &ConnectionQuic{
-		Conn:         conn,
-		ConnID:       connID,
-		isClosed:     false,
-		ExitBuffChan: make(chan bool, 1),
-		MsgHandler:   server.GetMsgHandler(),
-		msgChan:      make(chan []byte),
-		connManager:  server.GetConnMgr(),
-		onConnStart:  server.GetOnConnStart(),
-		onConnStop:   server.GetOnConnStop(),
+		Conn:     conn,
+		ConnID:   connID,
+		isClosed: false,
+		//ExitBuffChan: make(chan bool, 1),
+		MsgHandler:  server.GetMsgHandler(),
+		msgChan:     make(chan []byte),
+		connManager: server.GetConnMgr(),
+		onConnStart: server.GetOnConnStart(),
+		onConnStop:  server.GetOnConnStop(),
 	}
 
 	server.GetConnMgr().Add(c)
@@ -95,7 +96,7 @@ func (c *ConnectionQuic) StartWriter() {
 				fmt.Println("Send Data error:, ", err, " Conn Writer exit")
 				return
 			}
-		case <-c.ExitBuffChan:
+		case <-c.ctx.Done():
 			fmt.Println("StartWriter ExitBuffChan")
 			//conn已经关闭
 			return
@@ -114,7 +115,7 @@ func (c *ConnectionQuic) StartReader() {
 	conn, ok := c.GetConnection().(*quic.Connection)
 	if !ok {
 		fmt.Println("get quic Conn err", c.GetConnection())
-		c.ExitBuffChan <- true
+		//c.ExitBuffChan <- true
 		return
 	}
 	//(*Conn).SendMessage()
@@ -122,7 +123,7 @@ func (c *ConnectionQuic) StartReader() {
 	stream, err := (*conn).AcceptStream(context.Background())
 	if err != nil {
 		fmt.Println("get quic stream err : ", err)
-		c.ExitBuffChan <- true
+		//c.ExitBuffChan <- true
 		return
 	}
 	for {
@@ -132,7 +133,7 @@ func (c *ConnectionQuic) StartReader() {
 		size, err := stream.Read(headData)
 		if size != int(dp.GetHeadLen()) {
 			fmt.Println("read Msg head length err, length : ", size)
-			c.ExitBuffChan <- true
+			//c.ExitBuffChan <- true
 			return
 		}
 
@@ -142,7 +143,7 @@ func (c *ConnectionQuic) StartReader() {
 		msg, err := dp.Unpack(headData)
 		if err != nil {
 			fmt.Println("unpack err ", err)
-			c.ExitBuffChan <- true
+			//c.ExitBuffChan <- true
 			continue
 		}
 
@@ -152,7 +153,7 @@ func (c *ConnectionQuic) StartReader() {
 			size, err = stream.Read(data)
 			if err != nil || size != int(msg.GetDataLen()) {
 				fmt.Println("read Msg data length err, length : , err: ", size, err)
-				c.ExitBuffChan <- true
+				//c.ExitBuffChan <- true
 				return
 			}
 		}
@@ -192,20 +193,20 @@ func (c *ConnectionQuic) Start() {
 		c.hb.Start()
 		c.updateActivity()
 	}
-
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 	//1 开启用于写回客户端数据流程的Goroutine
 	go c.StartReader()
 	//2 开启用户从客户端读取数据流程的Goroutine
 	go c.StartWriter()
 	c.callOnConnStart()
-	for {
-		select {
-		case <-c.ExitBuffChan:
 
-			//得到退出消息，不再阻塞
-			return
-		}
+	select {
+	case <-c.ctx.Done():
+
+		//得到退出消息，不再阻塞
+		return
 	}
+
 }
 
 // Stop 停止连接，结束当前连接状态M
@@ -233,7 +234,7 @@ func (c *ConnectionQuic) Stop() {
 	}
 
 	//通知从缓冲队列读数据的业务，该链接已经关闭
-	c.ExitBuffChan <- true
+	c.cancel()
 	//close(c.ExitBuffChan)
 	//close(c.msgChan)
 }

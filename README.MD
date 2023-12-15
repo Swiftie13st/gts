@@ -3,12 +3,12 @@
 GTS(Go Tcp Server)使用golang编写的一个轻量级、高性能TCP服务器框架。
 
 1. 提供抽象层接口，可进行二次开发作为后端模块的消息中转、长链接游戏服务器等功能。
-2. 通过TLV(Type-Len-Value)封包格式解决TCP粘包问题
+2. 通过TLV(Type-Len-Value)封包格式解决TCP粘包问题。
 3. 仿造[ants](https://github.com/panjf2000/ants)实现协程池进行资源复用，减少内存分配的频率，提高执行效率。
 4. 通过心跳检测机制监测双方连接状态。
 5. 通过雪花算法分配连接id。
-6. 支持TCP、WebSocket、Quic、KCP协议
-7. 使用epoll机制优化goroutine-per-connection方式，减少内存资源占用与调度
+6. 支持TCP、WebSocket、Quic、KCP协议。
+7. 使用epoll机制优化goroutine-per-connection方式，减少内存资源占用与调度。
 
 ## 架构设计
 

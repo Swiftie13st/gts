@@ -7,6 +7,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
@@ -31,7 +32,8 @@ type WsConnection struct {
 	MsgHandler iface.IMsgHandle
 
 	//告知该链接已经退出/停止的channel
-	ExitBuffChan chan bool
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	//用于读、写两个goroutine之间的消息通信
 	msgChan chan []byte
@@ -59,15 +61,15 @@ type WsConnection struct {
 // newServerWsConn 创建WebSocket连接的方法
 func newServerWsConn(server iface.IServer, conn *websocket.Conn, connID uint64) iface.IConnection {
 	c := &WsConnection{
-		Conn:         conn,
-		ConnID:       connID,
-		isClosed:     false,
-		ExitBuffChan: make(chan bool, 1),
-		MsgHandler:   server.GetMsgHandler(),
-		msgChan:      make(chan []byte, 1024),
-		connManager:  server.GetConnMgr(),
-		onConnStart:  server.GetOnConnStart(),
-		onConnStop:   server.GetOnConnStop(),
+		Conn:     conn,
+		ConnID:   connID,
+		isClosed: false,
+		//ExitBuffChan: make(chan bool, 1),
+		MsgHandler:  server.GetMsgHandler(),
+		msgChan:     make(chan []byte, 1024),
+		connManager: server.GetConnMgr(),
+		onConnStart: server.GetOnConnStart(),
+		onConnStop:  server.GetOnConnStop(),
 	}
 
 	server.GetConnMgr().Add(c)
@@ -76,14 +78,14 @@ func newServerWsConn(server iface.IServer, conn *websocket.Conn, connID uint64) 
 
 func newClientWsConn(client iface.IClient, conn *websocket.Conn) iface.IConnection {
 	c := &Connection{
-		WsConn:       conn,
-		ConnID:       0,
-		isClosed:     false,
-		ExitBuffChan: make(chan bool, 1),
-		MsgHandler:   client.GetMsgHandler(),
-		msgChan:      make(chan []byte),
-		onConnStart:  client.GetOnConnStart(),
-		onConnStop:   client.GetOnConnStop(),
+		WsConn:   conn,
+		ConnID:   0,
+		isClosed: false,
+		//ExitBuffChan: make(chan bool, 1),
+		MsgHandler:  client.GetMsgHandler(),
+		msgChan:     make(chan []byte),
+		onConnStart: client.GetOnConnStart(),
+		onConnStop:  client.GetOnConnStop(),
 	}
 
 	return c
@@ -104,7 +106,7 @@ func (c *WsConnection) StartWriter() {
 				fmt.Println("Send Data error:, ", err, " Conn Writer exit")
 				return
 			}
-		case <-c.ExitBuffChan:
+		case <-c.ctx.Done():
 			fmt.Println("StartWriter ExitBuffChan")
 			//conn已经关闭
 			return
@@ -127,7 +129,7 @@ func (c *WsConnection) StartReader() {
 		headData, err := c.read()
 		if err != nil {
 			fmt.Println("read Msg head error ", err)
-			c.ExitBuffChan <- true
+			//c.ExitBuffChan <- true
 			continue
 		}
 		fmt.Println("recv data: ", string(headData))
@@ -136,7 +138,7 @@ func (c *WsConnection) StartReader() {
 		msg, err := dp.UnpackHead(headData)
 		if err != nil {
 			fmt.Println("unpack err ", err)
-			c.ExitBuffChan <- true
+			//c.ExitBuffChan <- true
 			continue
 		}
 
@@ -170,7 +172,7 @@ func (c *WsConnection) read() ([]byte, error) {
 	if c.isClosed {
 		return nil, errors.New("Conn close,reader")
 	}
-	_, message, err := c.Conn.ReadMessage()
+	_, msg, err := c.Conn.ReadMessage()
 	if err != nil {
 		if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 			fmt.Printf("error: %v", err)
@@ -179,7 +181,7 @@ func (c *WsConnection) read() ([]byte, error) {
 		}
 		return nil, err
 	}
-	return message, err
+	return msg, err
 }
 
 // Start 启动连接，让当前连接开始工作
@@ -191,20 +193,20 @@ func (c *WsConnection) Start() {
 		c.hb.Start()
 		c.updateActivity()
 	}
-
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 	//1 开启用于写回客户端数据流程的Goroutine
 	go c.StartReader()
 	//2 开启用户从客户端读取数据流程的Goroutine
 	go c.StartWriter()
 	c.callOnConnStart()
-	for {
-		select {
-		case <-c.ExitBuffChan:
 
-			//得到退出消息，不再阻塞
-			return
-		}
+	select {
+	case <-c.ctx.Done():
+
+		//得到退出消息，不再阻塞
+		return
 	}
+
 }
 
 // Stop 停止连接，结束当前连接状态M
@@ -237,7 +239,7 @@ func (c *WsConnection) Stop() {
 	}
 
 	//通知从缓冲队列读数据的业务，该链接已经关闭
-	c.ExitBuffChan <- true
+	c.cancel()
 	//close(c.ExitBuffChan)
 	//close(c.msgChan)
 }
