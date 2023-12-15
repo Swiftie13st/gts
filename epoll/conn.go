@@ -7,6 +7,7 @@
 package epoll
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
@@ -33,7 +34,8 @@ type Connection struct {
 	MsgHandler iface.IMsgHandle
 
 	//告知该链接已经退出/停止的channel
-	ExitBuffChan chan struct{}
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	//用于读、写两个goroutine之间的消息通信
 	msgChan chan []byte
@@ -61,15 +63,15 @@ type Connection struct {
 // newServerConn 创建连接的方法
 func newServerConn(server iface.IServer, conn *net.TCPConn, connID uint64) iface.IConnection {
 	c := &Connection{
-		Conn:         conn,
-		ConnID:       connID,
-		isClosed:     false,
-		ExitBuffChan: make(chan struct{}, 1),
-		MsgHandler:   server.GetMsgHandler(),
-		msgChan:      make(chan []byte, 1024),
-		connManager:  server.GetConnMgr(),
-		onConnStart:  server.GetOnConnStart(),
-		onConnStop:   server.GetOnConnStop(),
+		Conn:     conn,
+		ConnID:   connID,
+		isClosed: false,
+		//ExitBuffChan: make(chan struct{}, 1),
+		MsgHandler:  server.GetMsgHandler(),
+		msgChan:     make(chan []byte, 1024),
+		connManager: server.GetConnMgr(),
+		onConnStart: server.GetOnConnStart(),
+		onConnStop:  server.GetOnConnStop(),
 	}
 
 	server.GetConnMgr().Add(c)
@@ -91,7 +93,7 @@ func (c *Connection) StartWriter() {
 				fmt.Println("Send Data error:, ", err, " Conn Writer exit")
 				return
 			}
-		case <-c.ExitBuffChan:
+		case <-c.ctx.Done():
 			fmt.Println("StartWriter ExitBuffChan")
 			//conn已经关闭
 			return
@@ -119,7 +121,7 @@ func (c *Connection) Read() error {
 	headData := make([]byte, dp.GetHeadLen())
 	if _, err := io.ReadFull(c.GetConnection().(*net.TCPConn), headData); err != nil {
 		fmt.Println("read Msg head error ", err)
-		close(c.ExitBuffChan)
+		//c.ExitBuffChan <- struct{}{}
 		return err
 	}
 	fmt.Println("headData", headData)
@@ -128,7 +130,7 @@ func (c *Connection) Read() error {
 	msg, err := dp.UnpackHead(headData)
 	if err != nil {
 		fmt.Println("unpack err ", err)
-		close(c.ExitBuffChan)
+		//c.ExitBuffChan <- struct{}{}
 		return err
 	}
 
@@ -138,7 +140,7 @@ func (c *Connection) Read() error {
 		data = make([]byte, msg.GetDataLen())
 		if _, err := io.ReadFull(c.GetConnection().(*net.TCPConn), data); err != nil {
 			fmt.Println("read Msg data error ", err)
-			close(c.ExitBuffChan)
+			//c.ExitBuffChan <- struct{}{}
 			return err
 		}
 	}
@@ -176,6 +178,7 @@ func (c *Connection) Start() {
 		c.hb.Start()
 		c.updateActivity()
 	}
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 
 	//1 开启用于写回客户端数据流程的Goroutine
 	// go c.StartReader()
@@ -183,13 +186,11 @@ func (c *Connection) Start() {
 	go c.StartWriter()
 	c.callOnConnStart()
 
-	for {
-		select {
-		case <-c.ExitBuffChan:
+	select {
+	case <-c.ctx.Done():
 
-			//得到退出消息，不再阻塞
-			return
-		}
+		//得到退出消息，不再阻塞
+		return
 	}
 }
 
@@ -218,8 +219,9 @@ func (c *Connection) Stop() {
 	}
 
 	//通知从缓冲队列读数据的业务，该链接已经关闭
-	//c.ExitBuffChan <- true
-	close(c.ExitBuffChan)
+	c.cancel()
+	//c.ExitBuffChan <- struct{}{}
+	//close(c.ExitBuffChan)
 	//close(c.msgChan)
 }
 
