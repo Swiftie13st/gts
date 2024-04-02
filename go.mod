@@ -12,7 +12,7 @@ require (
 	github.com/xtaci/kcp-go v5.4.20+incompatible
 	golang.org/x/crypto v0.17.0
 	golang.org/x/sys v0.15.0
-	google.golang.org/protobuf v1.28.1
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
